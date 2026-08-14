@@ -58,6 +58,35 @@ export const bookingController = new Elysia({ prefix: "/api/v1/bookings" })
       },
     }
   )
+  .post(
+    "/atomic",
+    async ({ body, request }) => {
+      const { requireAuth, requestId } = getRequestContext(request);
+      const user = requireAuth();
+      const idempotencyKey = request.headers.get("idempotency-key") || request.headers.get("Idempotency-Key") || undefined;
+      const result = await bookingService.createBookingAtomic({
+        userId: user.userId,
+        showId: body.showId,
+        seatIds: body.seatIds,
+        couponCode: body.couponCode,
+        providerName: body.providerName,
+        idempotencyKey,
+      });
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      body: t.Object({
+        showId: t.String(),
+        seatIds: t.Array(t.String(), { minItems: 1, maxItems: 10 }),
+        couponCode: t.Optional(t.String()),
+        providerName: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["Bookings"],
+        summary: "Single-transaction atomic seat reservation, booking creation, and payment intent generation",
+      },
+    }
+  )
   .get(
     "/:bookingId",
     async ({ params, request }) => {

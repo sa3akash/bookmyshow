@@ -1,9 +1,12 @@
 import { db } from "@/infrastructure/database/client";
 import { bookings, bookingSeats, outboxEvents, seatLocks } from "@/infrastructure/database/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { seatLockService } from "@/modules/inventory/seat-lock.service";
 import { idempotencyService } from "@/core/idempotency/idempotency.service";
 import { BookingError, NotFoundError, AuthorizationError } from "@/core/errors/app-error";
+import { PaymentService } from "@/modules/payments/service/payment.service";
+
+const paymentService = new PaymentService();
 
 export interface CreateBookingHoldDTO {
   userId: string;
@@ -14,16 +17,25 @@ export interface CreateBookingHoldDTO {
 }
 
 export class BookingService {
-  async holdSeats(dto: CreateBookingHoldDTO) {
-    // 1. Idempotency pre-check
+  /**
+   * Section 10: Single-Transaction Atomic Booking Reservation Pipeline:
+   * 1. Validate show existence
+   * 2. Validate seat existence
+   * 3. Validate seat availability (FOR UPDATE row locking)
+   * 4. Lock seats & insert seat_locks
+   * 5. Create booking record & booking_seats line items
+   * 6. Create payment intent
+   * 7. Commit PostgreSQL transaction & return atomic result
+   */
+  async createBookingAtomic(dto: CreateBookingHoldDTO & { providerName?: string }) {
     if (dto.idempotencyKey) {
-      const cached = await idempotencyService.get(dto.idempotencyKey, dto.userId);
+      const cached = await idempotencyService.get(dto.idempotencyKey, dto.userId, dto);
       if (cached) {
         return cached.body;
       }
     }
 
-    // 2. Lock seats atomically
+    // 1-4. Lock seats atomically (verifies show, seat existence, availability with FOR UPDATE row locks & Redis locks)
     const lockResult = await seatLockService.lockSeats({
       showId: dto.showId,
       seatIds: dto.seatIds,
@@ -31,9 +43,9 @@ export class BookingService {
     });
 
     const bookingNumber = "BMS-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Date.now().toString().slice(-4);
-    const finalAmountMinor = lockResult.totalAmountMinor; // Base pricing (coupon discounts applied during payment phase)
+    const finalAmountMinor = lockResult.totalAmountMinor;
 
-    // 3. Create booking and outbox event in PostgreSQL transaction
+    // 5-7. Create booking, attach hold, and insert outbox event inside transaction
     const bookingResult = await db.transaction(async (tx) => {
       const [newBooking] = await tx
         .insert(bookings)
@@ -42,7 +54,7 @@ export class BookingService {
           userId: dto.userId,
           showId: dto.showId,
           holdId: lockResult.holdId,
-          status: "SEATS_HELD",
+          status: "PAYMENT_PENDING",
           totalAmountMinor: lockResult.totalAmountMinor,
           discountAmountMinor: 0,
           finalAmountMinor,
@@ -52,10 +64,9 @@ export class BookingService {
         .returning();
 
       if (!newBooking) {
-        throw new BookingError("Failed to create booking record");
+        throw new BookingError("Failed to create atomic booking record");
       }
 
-      // Insert seat line items
       const bookingSeatRecords = lockResult.seatDetails.map((seat) => ({
         bookingId: newBooking.id,
         seatId: seat.seatId,
@@ -65,7 +76,6 @@ export class BookingService {
       await tx.insert(bookingSeats).values(bookingSeatRecords);
       await seatLockService.attachBookingToHold(lockResult.holdId, newBooking.id);
 
-      // Insert transactional outbox event inside SAME transaction
       await tx.insert(outboxEvents).values({
         eventType: "booking.created.v1",
         aggregateType: "booking",
@@ -93,7 +103,100 @@ export class BookingService {
       };
     });
 
-    // Save idempotency response if key provided
+    // Create payment intent for the generated booking
+    const providerName = dto.providerName || "MOCK";
+    const paymentIntent = await paymentService.createPaymentIntent(
+      bookingResult.bookingId,
+      dto.userId,
+      providerName
+    );
+
+    const atomicResult = {
+      ...bookingResult,
+      paymentIntent,
+    };
+
+    if (dto.idempotencyKey) {
+      await idempotencyService.save(dto.idempotencyKey, dto.userId, dto, 200, atomicResult);
+    }
+
+    return atomicResult;
+  }
+
+  async holdSeats(dto: CreateBookingHoldDTO) {
+    if (dto.idempotencyKey) {
+      const cached = await idempotencyService.get(dto.idempotencyKey, dto.userId);
+      if (cached) {
+        return cached.body;
+      }
+    }
+
+    const lockResult = await seatLockService.lockSeats({
+      showId: dto.showId,
+      seatIds: dto.seatIds,
+      userId: dto.userId,
+    });
+
+    const bookingNumber = "BMS-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Date.now().toString().slice(-4);
+    const finalAmountMinor = lockResult.totalAmountMinor;
+
+    const bookingResult = await db.transaction(async (tx) => {
+      const [newBooking] = await tx
+        .insert(bookings)
+        .values({
+          bookingNumber,
+          userId: dto.userId,
+          showId: dto.showId,
+          holdId: lockResult.holdId,
+          status: "SEATS_HELD",
+          totalAmountMinor: lockResult.totalAmountMinor,
+          discountAmountMinor: 0,
+          finalAmountMinor,
+          couponCode: dto.couponCode,
+          expiresAt: lockResult.expiresAt,
+        })
+        .returning();
+
+      if (!newBooking) {
+        throw new BookingError("Failed to create booking record");
+      }
+
+      const bookingSeatRecords = lockResult.seatDetails.map((seat) => ({
+        bookingId: newBooking.id,
+        seatId: seat.seatId,
+        priceMinor: seat.priceMinor,
+      }));
+
+      await tx.insert(bookingSeats).values(bookingSeatRecords);
+      await seatLockService.attachBookingToHold(lockResult.holdId, newBooking.id);
+
+      await tx.insert(outboxEvents).values({
+        eventType: "booking.created.v1",
+        aggregateType: "booking",
+        aggregateId: newBooking.id,
+        payload: {
+          bookingId: newBooking.id,
+          bookingNumber: newBooking.bookingNumber,
+          userId: dto.userId,
+          showId: dto.showId,
+          seatIds: dto.seatIds,
+          finalAmountMinor,
+          expiresAt: lockResult.expiresAt.toISOString(),
+        },
+      });
+
+      return {
+        bookingId: newBooking.id,
+        bookingNumber: newBooking.bookingNumber,
+        holdId: lockResult.holdId,
+        status: newBooking.status,
+        totalAmountMinor: newBooking.totalAmountMinor,
+        finalAmountMinor: newBooking.finalAmountMinor,
+        expiresAt: newBooking.expiresAt,
+        seats: lockResult.seatDetails,
+      };
+    });
+
     if (dto.idempotencyKey) {
       await idempotencyService.save(dto.idempotencyKey, dto.userId, dto, 200, bookingResult);
     }

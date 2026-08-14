@@ -42,7 +42,7 @@ export const venueScreens = pgTable("venue_screens", {
   id: uuid("id").defaultRandom().primaryKey(),
   venueId: uuid("venue_id").notNull().references(() => venues.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
-  supportedFormats: jsonb("supported_formats").$type<string[]>().default(["2D", "3D", "IMAX"]),
+  supportedFormats: jsonb("supported_formats").$type<string[]>().default(["2D", "3D", "IMAX", "4DX", "DOLBY", "VIP", "PREMIUM"]),
   totalSeats: integer("total_seats").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
 }, (table) => [
@@ -55,12 +55,16 @@ export const seats = pgTable("seats", {
   rowLabel: varchar("row_label", { length: 10 }).notNull(),
   columnNumber: integer("column_number").notNull(),
   seatNumber: varchar("seat_number", { length: 20 }).notNull(),
-  type: varchar("type", { length: 50 }).default("Regular").notNull(),
+  type: varchar("type", { length: 50 }).default("REGULAR").notNull(), // REGULAR, PREMIUM, VIP, RECLINER, COUPLE, ACCESSIBLE, WHEELCHAIR, SOFA, BALCONY, BOX
   category: varchar("category", { length: 50 }).default("Standard").notNull(),
   x: integer("x").default(0).notNull(),
   y: integer("y").default(0).notNull(),
+  width: integer("width").default(30).notNull(),
+  height: integer("height").default(30).notNull(),
+  rotation: integer("rotation").default(0).notNull(),
   priceMultiplier: numeric("price_multiplier", { precision: 4, scale: 2 }).default("1.00").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 }, (table) => [
   uniqueIndex("idx_seats_screen_seat").on(table.screenId, table.seatNumber),
   index("idx_seats_screen").on(table.screenId),

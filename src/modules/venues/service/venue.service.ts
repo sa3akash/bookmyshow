@@ -1,7 +1,6 @@
 import { db } from "@/infrastructure/database/client";
 import { cities, venues, venueScreens, seats } from "@/infrastructure/database/schema";
 import { eq, and } from "drizzle-orm";
-import { NotFoundError, ConflictError } from "@/core/errors/app-error";
 
 export interface CreateCityDTO {
   name: string;
@@ -27,9 +26,13 @@ export interface CreateScreenLayoutDTO {
   rows: Array<{
     rowLabel: string;
     seatsCount: number;
-    type?: string;
+    type?: string; // REGULAR, PREMIUM, VIP, RECLINER, COUPLE, ACCESSIBLE, WHEELCHAIR, SOFA, BALCONY, BOX
     category?: string;
     priceMultiplier?: string;
+    width?: number;
+    height?: number;
+    rotation?: number;
+    metadata?: Record<string, unknown>;
   }>;
 }
 
@@ -71,7 +74,7 @@ export class VenueService {
         .values({
           venueId: dto.venueId,
           name: dto.name,
-          supportedFormats: dto.supportedFormats || ["2D", "3D"],
+          supportedFormats: dto.supportedFormats || ["2D", "3D", "IMAX", "4DX", "DOLBY", "VIP", "PREMIUM"],
           totalSeats,
         })
         .returning();
@@ -90,6 +93,10 @@ export class VenueService {
         priceMultiplier: string;
         x: number;
         y: number;
+        width: number;
+        height: number;
+        rotation: number;
+        metadata: Record<string, unknown>;
       }> = [];
 
       let yPos = 0;
@@ -101,11 +108,15 @@ export class VenueService {
             rowLabel: row.rowLabel,
             columnNumber: col,
             seatNumber: `${row.rowLabel}${col}`,
-            type: row.type || "Regular",
+            type: row.type || "REGULAR",
             category: row.category || "Standard",
             priceMultiplier: row.priceMultiplier || "1.00",
             x: col * 35,
             y: yPos,
+            width: row.width || 30,
+            height: row.height || 30,
+            rotation: row.rotation || 0,
+            metadata: row.metadata || {},
           });
         }
       }

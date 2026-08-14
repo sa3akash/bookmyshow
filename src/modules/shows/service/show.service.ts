@@ -93,6 +93,10 @@ export class ShowService {
     return await query;
   }
 
+  /**
+   * Real-time Seat Map Retrieval:
+   * Maps seats to exact statuses: AVAILABLE | HELD | PAYMENT_PENDING | BOOKED | BLOCKED | SOLD
+   */
   async getShowSeatMap(showId: string) {
     const show = await db.query.shows.findFirst({
       where: eq(shows.id, showId),
@@ -102,12 +106,10 @@ export class ShowService {
       throw new NotFoundError(`Show with ID ${showId} not found`);
     }
 
-    // Fetch all seats for the screen
     const allSeats = await db.query.seats.findMany({
-      where: and(eq(seats.screenId, show.screenId), eq(seats.isActive, true)),
+      where: eq(seats.screenId, show.screenId),
     });
 
-    // Fetch active held locks for this show
     const now = new Date();
     const activeLocks = await db.query.seatLocks.findMany({
       where: and(
@@ -118,28 +120,41 @@ export class ShowService {
     });
     const heldSeatIds = new Set(activeLocks.map((l) => l.seatId));
 
-    // Fetch confirmed booked seats for this show
-    const confirmedBookings = await db
-      .select({ seatId: bookingSeats.seatId })
+    const activeBookings = await db
+      .select({ seatId: bookingSeats.seatId, bookingStatus: bookings.status })
       .from(bookingSeats)
       .innerJoin(bookings, eq(bookingSeats.bookingId, bookings.id))
       .where(
         and(
           eq(bookings.showId, showId),
-          inArray(bookings.status, ["CONFIRMED", "TICKET_ISSUED", "PAYMENT_PENDING"])
+          inArray(bookings.status, ["CONFIRMED", "TICKET_ISSUED", "PAYMENT_PENDING", "SEATS_HELD"])
         )
       );
 
-    const bookedSeatIds = new Set(confirmedBookings.map((b) => b.seatId));
+    const paymentPendingSeatIds = new Set(
+      activeBookings.filter((b) => b.bookingStatus === "PAYMENT_PENDING" || b.bookingStatus === "SEATS_HELD").map((b) => b.seatId)
+    );
+    const confirmedSeatIds = new Set(
+      activeBookings.filter((b) => b.bookingStatus === "CONFIRMED").map((b) => b.seatId)
+    );
+    const soldSeatIds = new Set(
+      activeBookings.filter((b) => b.bookingStatus === "TICKET_ISSUED").map((b) => b.seatId)
+    );
 
-    // Map seat layout with dynamic pricing and availability status
     return {
       showId: show.id,
       basePriceMinor: show.basePriceMinor,
       seats: allSeats.map((s) => {
-        let status: "AVAILABLE" | "HELD" | "BOOKED" = "AVAILABLE";
-        if (bookedSeatIds.has(s.id)) {
+        let status: "AVAILABLE" | "HELD" | "PAYMENT_PENDING" | "BOOKED" | "BLOCKED" | "SOLD" = "AVAILABLE";
+
+        if (!s.isActive) {
+          status = "BLOCKED";
+        } else if (soldSeatIds.has(s.id)) {
+          status = "SOLD";
+        } else if (confirmedSeatIds.has(s.id)) {
           status = "BOOKED";
+        } else if (paymentPendingSeatIds.has(s.id)) {
+          status = "PAYMENT_PENDING";
         } else if (heldSeatIds.has(s.id)) {
           status = "HELD";
         }
