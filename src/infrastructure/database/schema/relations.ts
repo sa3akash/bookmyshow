@@ -171,6 +171,7 @@ export const seatLocksRelations = relations(seatLocks, ({ one }) => ({
   show: one(shows, { fields: [seatLocks.showId], references: [shows.id] }),
   seat: one(seats, { fields: [seatLocks.seatId], references: [seats.id] }),
   user: one(users, { fields: [seatLocks.userId], references: [users.id] }),
+  booking: one(bookings, { fields: [seatLocks.bookingId], references: [bookings.id] }),
 }));
 
 // ==========================================

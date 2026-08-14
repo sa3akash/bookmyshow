@@ -26,6 +26,19 @@ export const app = new Elysia()
           version: "1.0.0",
           description: "High-scale, production-grade ticket booking backend engine with REST & GraphQL APIs.\n\n🚀 **Apollo GraphQL Studio Sandbox**: [Launch Apollo Studio Sandbox Explorer](https://studio.apollographql.com/sandbox/explorer?endpoint=http://localhost:3000/graphql)\n\nFeatures: Movies, Live Events, Concerts, Sports, jsPDF Invoices, Bank Offers, Recommendations, Multi-Gateway Payments (bKash, Stripe, Razorpay, SSLCommerz, Nagad, Wallet), Refunds & Merchant Settlements",
         },
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "JWT",
+              description: "Enter JWT token to authorize API requests"
+            }
+          }
+        },
+        security: [
+          { bearerAuth: [] }
+        ],
         tags: [
           { name: "Auth", description: "Authentication, Registration & JWT Session Management" },
           { name: "Movies", description: "Movies Catalog, Cast, Crew & Trailer Media Gallery" },
@@ -64,7 +77,7 @@ export const app = new Elysia()
   })
   .onError(({ error, set, request, requestId }) => {
     const reqId = (requestId as string) || "system";
-    
+
     if (error instanceof AppError) {
       set.status = error.httpStatus;
       logger.warn({

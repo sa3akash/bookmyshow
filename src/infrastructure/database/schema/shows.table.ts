@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { movies } from "./movies.table";
 import { venueScreens, seats } from "./venues.table";
 import { users } from "./users.table";
+import { bookings } from "./bookings.table";
 
 export const shows = pgTable("shows", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -34,6 +35,7 @@ export const seatLocks = pgTable("seat_locks", {
   seatId: uuid("seat_id").notNull().references(() => seats.id),
   userId: uuid("user_id").notNull().references(() => users.id),
   holdId: uuid("hold_id").notNull(),
+  bookingId: uuid("booking_id").references(() => bookings.id),
   status: varchar("status", { length: 30 }).default("HELD").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -43,4 +45,5 @@ export const seatLocks = pgTable("seat_locks", {
     .where(sql`status = 'HELD'`),
   index("idx_seat_locks_hold").on(table.holdId),
   index("idx_seat_locks_user").on(table.userId),
+  index("idx_seat_locks_booking").on(table.bookingId),
 ]);

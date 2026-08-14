@@ -20,6 +20,7 @@ import { recommendationController } from "@/modules/recommendations/recommendati
 import { searchController } from "@/modules/search/controller/search.controller";
 import { reviewController } from "@/modules/reviews/controller/review.controller";
 import { adminController, metricsController } from "@/modules/admin/controller/admin.controller";
+import { seatHoldController } from "@/modules/inventory/controller/seat-hold.controller";
 import { realtimeWsController } from "@/websocket/realtime.gateway";
 import { graphqlController } from "@/modules/graphql/graphql.controller";
 
@@ -33,6 +34,7 @@ export const apiRoutes = new Elysia()
   .use(showController)
   .use(eventController)
   .use(bookingController)
+  .use(seatHoldController)
   .use(paymentController)
   .use(walletController)
   .use(refundController)

@@ -63,6 +63,7 @@ export class BookingService {
       }));
 
       await tx.insert(bookingSeats).values(bookingSeatRecords);
+      await seatLockService.attachBookingToHold(lockResult.holdId, newBooking.id);
 
       // Insert transactional outbox event inside SAME transaction
       await tx.insert(outboxEvents).values({
