@@ -32,6 +32,7 @@ export const authController = new Elysia({ prefix: "/api/v1/auth" })
       const ip = request.headers.get("x-forwarded-for") || "127.0.0.1";
       const result = await authService.login({
         email: body.email,
+        phone: body.phone,
         password: body.password,
         deviceInfo: userAgent,
         ipAddress: ip,
@@ -40,12 +41,13 @@ export const authController = new Elysia({ prefix: "/api/v1/auth" })
     },
     {
       body: t.Object({
-        email: t.String({ format: "email" }),
+        email: t.Optional(t.String()),
+        phone: t.Optional(t.String()),
         password: t.String(),
       }),
       detail: {
         tags: ["Auth"],
-        summary: "Authenticate user and issue tokens",
+        summary: "Authenticate user via email/password or phone/password and issue tokens",
       },
     }
   )
@@ -64,7 +66,7 @@ export const authController = new Elysia({ prefix: "/api/v1/auth" })
       }),
       detail: {
         tags: ["Auth"],
-        summary: "Rotate refresh token and issue new access token",
+        summary: "Rotate refresh token with reuse detection and issue new access token",
       },
     }
   )
@@ -81,7 +83,37 @@ export const authController = new Elysia({ prefix: "/api/v1/auth" })
       }),
       detail: {
         tags: ["Auth"],
-        summary: "Revoke refresh token",
+        summary: "Revoke single session refresh token",
+      },
+    }
+  )
+  .post(
+    "/logout-all",
+    async ({ request }) => {
+      const { requireAuth, requestId } = getRequestContext(request);
+      const user = requireAuth();
+      const result = await authService.logoutAllDevices(user.userId);
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      detail: {
+        tags: ["Auth"],
+        summary: "Revoke all active sessions across all devices for current user",
+      },
+    }
+  )
+  .get(
+    "/sessions",
+    async ({ request }) => {
+      const { requireAuth, requestId } = getRequestContext(request);
+      const user = requireAuth();
+      const sessions = await authService.listActiveSessions(user.userId);
+      return successResponse(sessions, undefined, requestId);
+    },
+    {
+      detail: {
+        tags: ["Auth"],
+        summary: "List all active non-revoked session records for current user",
       },
     }
   )

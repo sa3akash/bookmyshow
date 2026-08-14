@@ -8,6 +8,8 @@ import {
   userRoles,
   users,
 } from "./users.table";
+import { userMfaSecrets, userMfaRecoveryCodes } from "./mfa.table";
+import { userPasskeys } from "./passkeys.table";
 import { bookings, bookingSeats } from "./bookings.table";
 import { payments } from "./payments.table";
 import { reviews, settlements } from "./infra.table";
@@ -37,10 +39,25 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   wallet: one(wallets, { fields: [users.id], references: [wallets.userId] }),
   walletTransactions: many(walletTransactions),
   refunds: many(refunds),
+  mfaSecret: one(userMfaSecrets, { fields: [users.id], references: [userMfaSecrets.userId] }),
+  mfaRecoveryCodes: many(userMfaRecoveryCodes),
+  passkeys: many(userPasskeys),
 }));
 
 export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
   user: one(users, { fields: [userProfiles.userId], references: [users.id] }),
+}));
+
+export const userMfaSecretsRelations = relations(userMfaSecrets, ({ one }) => ({
+  user: one(users, { fields: [userMfaSecrets.userId], references: [users.id] }),
+}));
+
+export const userMfaRecoveryCodesRelations = relations(userMfaRecoveryCodes, ({ one }) => ({
+  user: one(users, { fields: [userMfaRecoveryCodes.userId], references: [users.id] }),
+}));
+
+export const userPasskeysRelations = relations(userPasskeys, ({ one }) => ({
+  user: one(users, { fields: [userPasskeys.userId], references: [users.id] }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({

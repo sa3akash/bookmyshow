@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { ConflictError, AuthenticationError, NotFoundError } from "@/core/errors/app-error";
 import { accountLockoutService } from "@/infrastructure/security/account-lockout.service";
 import { generateAccessToken, generateRefreshToken, hashToken, JwtPayload } from "../domain/jwt";
+import { logger } from "@/core/observability/logger";
 
 export interface RegisterDTO {
   email: string;
@@ -13,7 +14,8 @@ export interface RegisterDTO {
 }
 
 export interface LoginDTO {
-  email: string;
+  email?: string;
+  phone?: string;
   password: string;
   deviceInfo?: string;
   ipAddress?: string;
@@ -90,26 +92,31 @@ export class AuthService {
   }
 
   async login(dto: LoginDTO) {
+    const identifier = dto.email || dto.phone;
+    if (!identifier) {
+      throw new AuthenticationError("Email or phone number is required for authentication");
+    }
+
     // 1. Check Account Lockout status
-    await accountLockoutService.checkLockout(dto.email);
+    await accountLockoutService.checkLockout(identifier);
 
     const user = await db.query.users.findFirst({
-      where: eq(users.email, dto.email),
+      where: dto.email ? eq(users.email, dto.email) : eq(users.phone, dto.phone!),
     });
 
     if (!user || !user.isActive) {
-      await accountLockoutService.recordFailedAttempt(dto.email);
-      throw new AuthenticationError("Invalid email or password");
+      await accountLockoutService.recordFailedAttempt(identifier);
+      throw new AuthenticationError("Invalid credentials provided");
     }
 
     const isValidPassword = await Bun.password.verify(dto.password, user.passwordHash);
     if (!isValidPassword) {
-      await accountLockoutService.recordFailedAttempt(dto.email);
-      throw new AuthenticationError("Invalid email or password");
+      await accountLockoutService.recordFailedAttempt(identifier);
+      throw new AuthenticationError("Invalid credentials provided");
     }
 
     // Reset failed attempts on success
-    await accountLockoutService.resetAttempts(dto.email);
+    await accountLockoutService.resetAttempts(identifier);
 
     const { rolesList, permissionsList } = await this.getUserPermissions(user.id);
 
@@ -147,28 +154,42 @@ export class AuthService {
     };
   }
 
+  /**
+   * Refresh Token Rotation & Token Reuse Detection
+   */
   async refreshToken(rawRefreshToken: string, deviceInfo?: string, ipAddress?: string) {
     const tokenHash = await hashToken(rawRefreshToken);
 
-    const tokenRecord = await db.query.refreshTokens.findFirst({
-      where: and(
-        eq(refreshTokens.tokenHash, tokenHash),
-        eq(refreshTokens.isRevoked, false)
-      ),
+    const existingToken = await db.query.refreshTokens.findFirst({
+      where: eq(refreshTokens.tokenHash, tokenHash),
     });
 
-    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
-      throw new AuthenticationError("Invalid or expired refresh token");
+    if (!existingToken) {
+      throw new AuthenticationError("Invalid or unknown refresh token");
+    }
+
+    // REUSE DETECTION: If an already-revoked refresh token is presented, revoke ALL user sessions!
+    if (existingToken.isRevoked) {
+      logger.warn({ userId: existingToken.userId }, "CRITICAL: Refresh token reuse detected! Revoking all sessions for user");
+      await db
+        .update(refreshTokens)
+        .set({ isRevoked: true })
+        .where(eq(refreshTokens.userId, existingToken.userId));
+      throw new AuthenticationError("Security Alert: Refresh token reuse detected! All user sessions have been terminated.");
+    }
+
+    if (existingToken.expiresAt < new Date()) {
+      throw new AuthenticationError("Expired refresh token");
     }
 
     // Revoke old token (Rotation)
     await db
       .update(refreshTokens)
       .set({ isRevoked: true })
-      .where(eq(refreshTokens.id, tokenRecord.id));
+      .where(eq(refreshTokens.id, existingToken.id));
 
     const user = await db.query.users.findFirst({
-      where: eq(users.id, tokenRecord.userId),
+      where: eq(users.id, existingToken.userId),
     });
 
     if (!user || !user.isActive) {
@@ -194,8 +215,8 @@ export class AuthService {
     await db.insert(refreshTokens).values({
       userId: user.id,
       tokenHash: newTokenHash,
-      deviceInfo: deviceInfo || tokenRecord.deviceInfo,
-      ipAddress: ipAddress || tokenRecord.ipAddress,
+      deviceInfo: deviceInfo || existingToken.deviceInfo,
+      ipAddress: ipAddress || existingToken.ipAddress,
       expiresAt,
     });
 
@@ -205,12 +226,46 @@ export class AuthService {
     };
   }
 
+  /**
+   * Revoke single session
+   */
   async logout(rawRefreshToken: string) {
     const tokenHash = await hashToken(rawRefreshToken);
     await db
       .update(refreshTokens)
       .set({ isRevoked: true })
       .where(eq(refreshTokens.tokenHash, tokenHash));
+  }
+
+  /**
+   * Revoke ALL active sessions across all devices for user
+   */
+  async logoutAllDevices(userId: string) {
+    await db
+      .update(refreshTokens)
+      .set({ isRevoked: true })
+      .where(eq(refreshTokens.userId, userId));
+    logger.info({ userId }, "Terminated all active sessions across all devices");
+    return { success: true };
+  }
+
+  /**
+   * List active non-revoked session records for user
+   */
+  async listActiveSessions(userId: string) {
+    return await db.query.refreshTokens.findMany({
+      where: and(
+        eq(refreshTokens.userId, userId),
+        eq(refreshTokens.isRevoked, false)
+      ),
+      columns: {
+        id: true,
+        deviceInfo: true,
+        ipAddress: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+    });
   }
 
   async getUserPermissions(userId: string) {

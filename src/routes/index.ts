@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 // Import Controllers directly from Modules
 import { authController } from "@/modules/auth/controller/auth.controller";
 import { mfaController } from "@/modules/auth/controller/mfa.controller";
+import { webAuthnController } from "@/modules/auth/controller/webauthn.controller";
 import { movieController } from "@/modules/movies/controller/movie.controller";
 import { venueController } from "@/modules/venues/controller/venue.controller";
 import { showController } from "@/modules/shows/controller/show.controller";
@@ -26,6 +27,7 @@ export const apiRoutes = new Elysia()
   .use(metricsController)
   .use(authController)
   .use(mfaController)
+  .use(webAuthnController)
   .use(movieController)
   .use(venueController)
   .use(showController)

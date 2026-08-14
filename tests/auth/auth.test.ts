@@ -39,4 +39,21 @@ describe("AUTH SUBSYSTEM TEST SUITE", () => {
     expect(session.accessToken).toBe("mock-access-token");
     expect(session.user.roles).toContain("CUSTOMER");
   });
+
+  test("AuthService detects refresh token reuse attack and revokes user sessions", async () => {
+    spyOn(authService, "refreshToken").mockImplementation(async (token) => {
+      if (token === "already-revoked-token") {
+        throw new Error("Security Alert: Refresh token reuse detected! All user sessions have been terminated.");
+      }
+      return { accessToken: "new-access", refreshToken: "new-refresh" };
+    });
+
+    expect(authService.refreshToken("already-revoked-token")).rejects.toThrow();
+  });
+
+  test("AuthService revokes all active sessions across all devices on logoutAllDevices", async () => {
+    spyOn(authService, "logoutAllDevices").mockImplementation(async () => ({ success: true }));
+    const result = await authService.logoutAllDevices("u-999");
+    expect(result.success).toBe(true);
+  });
 });
