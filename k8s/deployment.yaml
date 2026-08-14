@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookmyshow-backend
+  labels:
+    app: bookmyshow-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bookmyshow-backend
+  template:
+    metadata:
+      labels:
+        app: bookmyshow-backend
+    spec:
+      containers:
+        - name: api
+          image: bookmyshow-backend:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          envFrom:
+            - configMapRef:
+                name: bookmyshow-config
+            - secretRef:
+                name: bookmyshow-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookmyshow-backend-svc
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app: bookmyshow-backend
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bookmyshow-backend-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bookmyshow-backend
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
