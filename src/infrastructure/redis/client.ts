@@ -21,6 +21,13 @@ redis.on("connect", () => {
   logger.info("Connected to Redis server");
 });
 
+export function createRedisSubscriber(): Redis {
+  return new Redis(env.REDIS_URL, {
+    keyPrefix: env.REDIS_KEY_PREFIX,
+    lazyConnect: true,
+  });
+}
+
 export async function checkRedisHealth(): Promise<boolean> {
   try {
     const ping = await redis.ping();

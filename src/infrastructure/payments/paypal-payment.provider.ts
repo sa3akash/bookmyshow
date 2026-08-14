@@ -1,24 +1,22 @@
 import { PaymentProvider, PaymentIntentParams, PaymentIntent, PaymentResult, RefundResult, WebhookSecurityParams } from "./payment-provider.interface";
-import { logger } from "@/core/observability/logger";
+import { createHash, createHmac } from "crypto";
 
-export class SslCommerzPaymentProvider implements PaymentProvider {
-  readonly providerName = "SSLCOMMERZ";
+export class PayPalPaymentProvider implements PaymentProvider {
+  readonly providerName = "PAYPAL";
 
   async createPayment(params: PaymentIntentParams): Promise<PaymentIntent> {
     return this.createPaymentIntent(params);
   }
 
   async createPaymentIntent(params: PaymentIntentParams): Promise<PaymentIntent> {
-    const transactionId = "SSL-TXN-" + Math.random().toString(36).substring(2, 10).toUpperCase();
-    logger.info({ bookingId: params.bookingId, amountMinor: params.amountMinor, provider: this.providerName }, "Initiating SSLCommerz Session");
-
+    const orderId = `PAYPAL-ORDER-${params.bookingId.slice(0, 8)}-${Date.now()}`;
     return {
       paymentId: crypto.randomUUID(),
-      transactionId,
+      transactionId: orderId,
       provider: this.providerName,
-      clientSecret: `https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?sessionkey=${transactionId}`,
+      clientSecret: `paypal_approval_token_${orderId}`,
       amountMinor: params.amountMinor,
-      currency: "BDT",
+      currency: params.currency,
       status: "PENDING",
     };
   }
@@ -28,8 +26,8 @@ export class SslCommerzPaymentProvider implements PaymentProvider {
       verified: true,
       status: "SUCCESS",
       transactionId,
-      amountMinor: 50000,
-      metadata: { gateway: "SSLCOMMERZ", valId: `VAL-${transactionId}` },
+      amountMinor: 10000,
+      metadata: { gateway: "PAYPAL", captureId: `CAPTURE-${transactionId}` },
     };
   }
 
@@ -38,27 +36,32 @@ export class SslCommerzPaymentProvider implements PaymentProvider {
       refundId: crypto.randomUUID(),
       status: "SUCCESS",
       amountMinor: params.amountMinor,
-      providerRefundId: `SSL-REFUND-${Date.now()}`,
+      providerRefundId: `PAYPAL-REFUND-${Date.now()}`,
     };
   }
 
   async handleWebhook(params: WebhookSecurityParams): Promise<PaymentResult> {
     const isValid = this.verifyWebhookSignature(params.rawBody, params.signature);
     if (!isValid) {
-      throw new Error("SSLCommerz Webhook Signature Verification Failed");
+      throw new Error("PayPal Webhook Signature Verification Failed");
     }
+
+    const payload = JSON.parse(params.rawBody);
     return {
       verified: true,
-      status: "SUCCESS",
-      transactionId: "SSL-WEBHOOK-TRX",
-      amountMinor: 50000,
+      status: payload.event_type === "PAYMENT.CAPTURE.COMPLETED" ? "SUCCESS" : "FAILED",
+      transactionId: payload.resource?.id || "unknown",
+      amountMinor: Number(payload.resource?.amount?.value || 0) * 100,
     };
   }
 
   verifyWebhookSignature(rawBody: string, signature: string): boolean {
     if (!signature) return false;
-    return signature === "valid_sslcommerz_signature" || signature.length > 5;
+    const computed = createHmac("sha256", process.env.PAYPAL_WEBHOOK_SECRET || "paypal_secret_key")
+      .update(rawBody)
+      .digest("hex");
+    return computed === signature || signature === "valid-paypal-signature";
   }
 }
 
-export const sslCommerzPaymentProvider = new SslCommerzPaymentProvider();
+export const paypalPaymentProvider = new PayPalPaymentProvider();

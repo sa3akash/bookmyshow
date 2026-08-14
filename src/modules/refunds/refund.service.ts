@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { seatLockService } from "@/modules/inventory/seat-lock.service";
 import { walletService } from "@/modules/wallet/wallet.service";
 import { financialLedgerService } from "@/core/ledger/ledger.service";
+import { idempotencyService } from "@/core/idempotency/idempotency.service";
 import { NotFoundError, BookingError, AuthorizationError } from "@/core/errors/app-error";
 
 export interface InitiateRefundDTO {
@@ -11,10 +12,19 @@ export interface InitiateRefundDTO {
   userId: string;
   reason: string;
   refundMethod?: "GATEWAY" | "WALLET";
+  idempotencyKey?: string;
 }
 
 export class RefundService {
   async initiateRefund(dto: InitiateRefundDTO) {
+    // 1. Idempotency pre-check
+    if (dto.idempotencyKey) {
+      const cached = await idempotencyService.get(dto.idempotencyKey, dto.userId, dto);
+      if (cached) {
+        return cached.body;
+      }
+    }
+
     const booking = await db.query.bookings.findFirst({
       where: eq(bookings.id, dto.bookingId),
     });
@@ -42,7 +52,7 @@ export class RefundService {
     const refundAmountMinor = booking.finalAmountMinor;
     const refundMethod = dto.refundMethod || "WALLET";
 
-    return await db.transaction(async (tx) => {
+    const refundResult = await db.transaction(async (tx) => {
       const [newRefund] = await tx
         .insert(refunds)
         .values({
@@ -107,6 +117,12 @@ export class RefundService {
         status: refundMethod === "WALLET" ? "PROCESSED" : "PENDING",
       };
     });
+
+    if (dto.idempotencyKey) {
+      await idempotencyService.save(dto.idempotencyKey, dto.userId, dto, 200, refundResult);
+    }
+
+    return refundResult;
   }
 
   async getRefund(refundId: string, userId: string) {

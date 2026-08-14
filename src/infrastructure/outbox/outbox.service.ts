@@ -2,11 +2,42 @@ import { db } from "@/infrastructure/database/client";
 import { outboxEvents } from "@/infrastructure/database/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { publishRealtimeEvent, BroadcastEventType } from "@/infrastructure/redis/pubsub";
+import { eventBus } from "@/core/events/event-bus";
+import { DomainEvent } from "@/core/events/domain-events";
 import { logger } from "@/core/observability/logger";
+
+export interface OutboxEnqueueDTO {
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, unknown>;
+  availableAt?: Date;
+}
 
 export class OutboxProcessor {
   private isRunning = false;
   private intervalId: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * Enqueue outbox event INSIDE THE SAME PostgreSQL TRANSACTION as entity creation/mutation
+   */
+  async enqueueOutboxEvent(tx: any, dto: OutboxEnqueueDTO) {
+    const [inserted] = await tx
+      .insert(outboxEvents)
+      .values({
+        eventType: dto.eventType,
+        aggregateType: dto.aggregateType,
+        aggregateId: dto.aggregateId,
+        payload: dto.payload,
+        status: "PENDING",
+        retryCount: 0,
+        availableAt: dto.availableAt || new Date(),
+      })
+      .returning();
+
+    logger.debug({ outboxId: inserted?.id, eventType: dto.eventType }, "Transactional outbox event enqueued");
+    return inserted;
+  }
 
   startWorker(pollIntervalMs = 2000) {
     if (this.isRunning) return;
@@ -60,23 +91,31 @@ export class OutboxProcessor {
       else if (event.eventType.includes("booked") || event.eventType.includes("confirmed")) eventType = "seat.booked";
       else if (event.eventType.includes("payment")) eventType = "payment.updated";
 
-      // 1. Broadcast to show:{showId}
+      // 1. Broadcast to Typed Domain Event Bus
+      await eventBus.publish({
+        specVersion: "1.0",
+        eventType: event.eventType as any,
+        aggregateType: event.aggregateType,
+        aggregateId: event.aggregateId,
+        eventId: event.id,
+        timestamp: event.createdAt.toISOString(),
+        payload: payload as any,
+      });
+
+      // 2. Broadcast to WebSockets via Redis Pub/Sub channels
       if (payload.showId) {
         await publishRealtimeEvent(`show:${payload.showId}`, eventType, payload);
       }
 
-      // 2. Broadcast to booking:{bookingId}
       if (payload.bookingId || event.aggregateId) {
         const bookingId = (payload.bookingId || event.aggregateId) as string;
         await publishRealtimeEvent(`booking:${bookingId}`, eventType, payload);
       }
 
-      // 3. Broadcast to user:{userId}
       if (payload.userId) {
         await publishRealtimeEvent(`user:${payload.userId}`, eventType, payload);
       }
 
-      // 4. Broadcast to admin
       await publishRealtimeEvent("admin", eventType, { ...payload, aggregateId: event.aggregateId });
 
       // Mark outbox event as PROCESSED
@@ -88,7 +127,7 @@ export class OutboxProcessor {
         })
         .where(eq(outboxEvents.id, event.id));
 
-      logger.debug({ eventId: event.id, eventType: event.eventType }, "Dispatched outbox event to WebSockets via Redis Pub/Sub");
+      logger.debug({ eventId: event.id, eventType: event.eventType }, "Dispatched outbox event to EventBus & Redis Pub/Sub");
     } catch (err) {
       logger.error({ err, eventId: event.id }, "Failed to dispatch outbox event");
       await db

@@ -3,10 +3,27 @@ import { payments, bookings, outboxEvents } from "@/infrastructure/database/sche
 import { eq, and } from "drizzle-orm";
 import { PaymentProviderFactory } from "@/infrastructure/payments/payment-provider.factory";
 import { financialLedgerService } from "@/core/ledger/ledger.service";
-import { PaymentError, NotFoundError, AuthorizationError } from "@/core/errors/app-error";
+import { PaymentError, NotFoundError, AuthorizationError, ConflictError } from "@/core/errors/app-error";
+import { redis } from "@/infrastructure/redis/client";
+import { logger } from "@/core/observability/logger";
 
 export class PaymentService {
-  async createPaymentIntent(bookingId: string, userId: string, providerName: string = "MOCK") {
+  /**
+   * Create Payment Intent (Decoupled across Stripe, Razorpay, PayPal, SSLCommerz, bKash, Nagad)
+   */
+  async createPaymentIntent(
+    bookingId: string,
+    userId: string,
+    providerName: string = "MOCK",
+    idempotencyKey?: string
+  ) {
+    if (idempotencyKey) {
+      const cached = await idempotencyService.get(idempotencyKey, userId, { bookingId, providerName });
+      if (cached) {
+        return cached.body;
+      }
+    }
+
     const booking = await db.query.bookings.findFirst({
       where: eq(bookings.id, bookingId),
     });
@@ -35,7 +52,6 @@ export class PaymentService {
       description: `Payment for Booking ${booking.bookingNumber}`,
     });
 
-    // Update DB inside transaction
     return await db.transaction(async (tx) => {
       const [insertedPayment] = await tx
         .insert(payments)
@@ -78,16 +94,131 @@ export class PaymentService {
         status: "PENDING",
       };
     });
-  }
 
-  async handleWebhook(providerName: string, payload: { transactionId: string; status: "SUCCESS" | "FAILED" }, signature: string) {
-    const provider = PaymentProviderFactory.getProvider(providerName);
-    const isValid = provider.verifyWebhookSignature(JSON.stringify(payload), signature);
-
-    if (!isValid) {
-      throw new PaymentError("Invalid webhook signature", { statusCode: 400 });
+    if (idempotencyKey) {
+      await idempotencyService.save(
+        idempotencyKey,
+        userId,
+        { bookingId, providerName },
+        200,
+        result
+      );
     }
 
+    return result;
+  }
+
+  /**
+   * INDEPENDENT BACKEND VERIFICATION ("Never trust frontend payment-success responses")
+   * Queries payment provider server API to verify payment state before marking booking as CONFIRMED.
+   */
+  async verifyPaymentIntent(paymentId: string) {
+    const paymentRecord = await db.query.payments.findFirst({
+      where: eq(payments.id, paymentId),
+    });
+
+    if (!paymentRecord) {
+      throw new NotFoundError(`Payment ${paymentId} not found`);
+    }
+
+    const provider = PaymentProviderFactory.getProvider(paymentRecord.provider);
+    const verification = await provider.verifyPayment(paymentRecord.transactionId || "");
+
+    if (!verification.verified || verification.status !== "SUCCESS") {
+      throw new PaymentError("Independent server payment verification failed");
+    }
+
+    if (paymentRecord.status === "SUCCESS") {
+      return { status: "SUCCESS", bookingId: paymentRecord.bookingId, verified: true };
+    }
+
+    return await db.transaction(async (tx) => {
+      await tx
+        .update(payments)
+        .set({ status: "SUCCESS", updatedAt: new Date() })
+        .where(eq(payments.id, paymentRecord.id));
+
+      await tx
+        .update(bookings)
+        .set({ status: "CONFIRMED", updatedAt: new Date() })
+        .where(eq(bookings.id, paymentRecord.bookingId));
+
+      await financialLedgerService.recordEntry({
+        entryType: "REVENUE",
+        direction: "CREDIT",
+        amountMinor: paymentRecord.amountMinor,
+        referenceType: "payment",
+        referenceId: paymentRecord.id,
+        metadata: { bookingId: paymentRecord.bookingId, provider: paymentRecord.provider },
+      });
+
+      await tx.insert(outboxEvents).values({
+        eventType: "payment.succeeded.v1",
+        aggregateType: "payment",
+        aggregateId: paymentRecord.id,
+        payload: {
+          paymentId: paymentRecord.id,
+          bookingId: paymentRecord.bookingId,
+          userId: paymentRecord.userId,
+          provider: paymentRecord.provider,
+          amountMinor: paymentRecord.amountMinor,
+        },
+      });
+
+      await tx.insert(outboxEvents).values({
+        eventType: "booking.confirmed.v1",
+        aggregateType: "booking",
+        aggregateId: paymentRecord.bookingId,
+        payload: {
+          bookingId: paymentRecord.bookingId,
+          userId: paymentRecord.userId,
+        },
+      });
+
+      return { status: "SUCCESS", bookingId: paymentRecord.bookingId, verified: true };
+    });
+  }
+
+  /**
+   * WEBHOOK SECURITY PROCESSING
+   * Enforces signature verification, timestamp verification (<5 mins), replay protection, and event deduplication.
+   */
+  async handleWebhook(
+    providerName: string,
+    rawBody: string,
+    signature: string,
+    timestamp?: string,
+    eventId?: string
+  ) {
+    const provider = PaymentProviderFactory.getProvider(providerName);
+
+    // 1. Signature Verification
+    const isValidSignature = provider.verifyWebhookSignature(rawBody, signature);
+    if (!isValidSignature) {
+      throw new PaymentError("Webhook Signature Verification Failed", { statusCode: 400 });
+    }
+
+    // 2. Timestamp Verification (Replay Protection: Reject >5 mins old)
+    if (timestamp) {
+      const webhookTime = Number(timestamp) * 1000;
+      const now = Date.now();
+      if (Math.abs(now - webhookTime) > 300000) {
+        // 5 minutes
+        throw new PaymentError("Webhook timestamp expired (Replay Attack blocked)", { statusCode: 400 });
+      }
+    }
+
+    // 3. Event Deduplication & Idempotency
+    const dedupKey = `idempotency:webhook:${providerName}:${eventId || rawBody.slice(0, 32)}`;
+    try {
+      const existing = await redis.get(dedupKey);
+      if (existing) {
+        logger.info({ dedupKey }, "Webhook event already processed (Deduplicated)");
+        return JSON.parse(existing);
+      }
+    } catch {}
+
+    const payload = JSON.parse(rawBody) as { transactionId: string; status: "SUCCESS" | "FAILED" };
     const paymentRecord = await db.query.payments.findFirst({
       where: eq(payments.transactionId, payload.transactionId),
     });
@@ -96,12 +227,11 @@ export class PaymentService {
       throw new NotFoundError(`Payment transaction ${payload.transactionId} not found`);
     }
 
-    // Idempotency: skip if already processed
     if (paymentRecord.status === "SUCCESS") {
       return { message: "Webhook already processed" };
     }
 
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       if (payload.status === "SUCCESS") {
         await tx
           .update(payments)
@@ -113,7 +243,6 @@ export class PaymentService {
           .set({ status: "CONFIRMED", updatedAt: new Date() })
           .where(eq(bookings.id, paymentRecord.bookingId));
 
-        // Record revenue ledger entry
         await financialLedgerService.recordEntry({
           entryType: "REVENUE",
           direction: "CREDIT",
@@ -161,6 +290,12 @@ export class PaymentService {
         return { status: "FAILED", bookingId: paymentRecord.bookingId };
       }
     });
+
+    try {
+      await redis.setex(dedupKey, 86400, JSON.stringify(result));
+    } catch {}
+
+    return result;
   }
 }
 

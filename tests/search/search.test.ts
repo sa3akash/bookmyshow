@@ -1,55 +1,27 @@
 import { describe, expect, test, spyOn } from "bun:test";
-import { searchService } from "@/modules/search/search.service";
+import { searchService } from "@/modules/search/service/search.service";
+import { MovieIndexDocument } from "@/infrastructure/search/opensearch.client";
 
 describe("FULL-TEXT CATALOG SEARCH TEST SUITE", () => {
   test("SearchService searches movies and venues matching query term", async () => {
     spyOn(searchService, "searchCatalog").mockImplementation(async () => ({
-      movies: [
+      items: [
         {
           id: "m-101",
+          type: "MOVIE",
           title: "Dune: Part Two",
-          description: null,
-          durationMinutes: 166,
+          description: "Paul Atreides unites with Chani and the Fremen",
           languages: ["English"],
           genres: ["Sci-Fi"],
-          releaseDate: new Date(),
-          rating: "PG-13",
-          posterUrl: null,
-          bannerUrl: null,
-          isActive: true,
-          createdAt: new Date(),
+          actors: ["Timothée Chalamet", "Zendaya"],
+          directors: ["Denis Villeneuve"],
         },
       ],
-      venues: [
-        {
-          venue: {
-            id: "v-1",
-            cityId: "c-1",
-            name: "Star Cineplex SKS Tower",
-            address: "Dhaka",
-            latitude: null,
-            longitude: null,
-            amenities: ["Dolby Atmos"],
-            isActive: true,
-            createdAt: new Date(),
-          },
-          city: {
-            id: "c-1",
-            name: "Dhaka",
-            state: "Dhaka",
-            country: "Bangladesh",
-            latitude: null,
-            longitude: null,
-            isActive: true,
-            createdAt: new Date(),
-          },
-        },
-      ],
+      total: 1,
     }));
 
-    const results = await searchService.searchCatalog("Dune", "c-1");
-    expect(results.movies.length).toBe(1);
-    expect(results.venues.length).toBe(1);
-    expect(results.movies[0]!.title).toBe("Dune: Part Two");
+    const results = await searchService.searchCatalog({ query: "Dune", cityId: "c-1" });
+    expect(results.items.length).toBe(1);
+    expect((results.items[0] as MovieIndexDocument).title).toBe("Dune: Part Two");
   });
 });

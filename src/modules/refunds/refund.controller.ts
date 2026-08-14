@@ -9,11 +9,13 @@ export const refundController = new Elysia({ prefix: "/api/v1/refunds" })
     async ({ body, request }) => {
       const { requireAuth, requestId } = getRequestContext(request);
       const user = requireAuth();
+      const idempotencyKey = request.headers.get("idempotency-key") || request.headers.get("Idempotency-Key") || undefined;
       const result = await refundService.initiateRefund({
         bookingId: body.bookingId,
         userId: user.userId,
         reason: body.reason,
         refundMethod: body.refundMethod || "WALLET",
+        idempotencyKey,
       });
       return successResponse(result, undefined, requestId);
     },
@@ -23,7 +25,10 @@ export const refundController = new Elysia({ prefix: "/api/v1/refunds" })
         reason: t.String({ minLength: 3 }),
         refundMethod: t.Optional(t.Union([t.Literal("GATEWAY"), t.Literal("WALLET")])),
       }),
-      detail: { tags: ["Payments"], summary: "Request booking refund (instant credit to wallet or payment gateway)" },
+      detail: {
+        tags: ["Payments"],
+        summary: "Request booking refund (instant credit to wallet or payment gateway with Idempotency-Key support)",
+      },
     }
   )
   .get(

@@ -4,6 +4,7 @@ import { stripePaymentProvider } from "./stripe-payment.provider";
 import { razorpayPaymentProvider } from "./razorpay-payment.provider";
 import { sslCommerzPaymentProvider } from "./sslcommerz-payment.provider";
 import { nagadPaymentProvider } from "./nagad-payment.provider";
+import { paypalPaymentProvider } from "./paypal-payment.provider";
 import { mockPaymentProvider } from "./mock-payment.provider";
 
 export class PaymentProviderFactory {
@@ -11,6 +12,7 @@ export class PaymentProviderFactory {
     ["BKASH", bkashPaymentProvider],
     ["STRIPE", stripePaymentProvider],
     ["RAZORPAY", razorpayPaymentProvider],
+    ["PAYPAL", paypalPaymentProvider],
     ["SSLCOMMERZ", sslCommerzPaymentProvider],
     ["NAGAD", nagadPaymentProvider],
     ["MOCK", mockPaymentProvider],
@@ -20,7 +22,6 @@ export class PaymentProviderFactory {
     const normalized = providerName.trim().toUpperCase();
     const provider = this.providers.get(normalized);
     if (!provider) {
-      // Fallback to mock provider for unknown gateways
       return mockPaymentProvider;
     }
     return provider;
