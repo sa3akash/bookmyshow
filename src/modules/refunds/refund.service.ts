@@ -15,11 +15,20 @@ export interface InitiateRefundDTO {
   idempotencyKey?: string;
 }
 
+export interface RefundResponse {
+  refundId: string;
+  bookingId: string;
+  amountMinor: number;
+  refundBDT: number;
+  refundMethod: string;
+  status: string;
+}
+
 export class RefundService {
-  async initiateRefund(dto: InitiateRefundDTO) {
+  async initiateRefund(dto: InitiateRefundDTO): Promise<RefundResponse> {
     // 1. Idempotency pre-check
     if (dto.idempotencyKey) {
-      const cached = await idempotencyService.get(dto.idempotencyKey, dto.userId, dto);
+      const cached = await idempotencyService.get<RefundResponse>(dto.idempotencyKey, dto.userId, dto);
       if (cached) {
         return cached.body;
       }
@@ -122,7 +131,14 @@ export class RefundService {
       await idempotencyService.save(dto.idempotencyKey, dto.userId, dto, 200, refundResult);
     }
 
-    return refundResult;
+    return refundResult as {
+      refundId: string;
+      bookingId: string;
+      amountMinor: number;
+      refundBDT: number;
+      refundMethod: string;
+      status: string;
+    };
   }
 
   async getRefund(refundId: string, userId: string) {

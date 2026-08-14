@@ -10,5 +10,12 @@ export const securityHeadersPlugin = new Elysia({ name: "security-headers" })
     set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     set.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(), payment=()";
     set.headers["Content-Security-Policy"] =
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://challenges.cloudflare.com https://studio.apollographql.com;";
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.jsdelivr.net; " +
+      "script-src-elem 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.jsdelivr.net; " +
+      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+      "img-src 'self' data: https:; " +
+      "font-src 'self' data: https://cdn.jsdelivr.net; " +
+      "connect-src 'self' https:; " +
+      "frame-src https://challenges.cloudflare.com https://studio.apollographql.com;";
   });

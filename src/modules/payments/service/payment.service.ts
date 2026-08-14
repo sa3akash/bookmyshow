@@ -3,6 +3,7 @@ import { payments, bookings, outboxEvents } from "@/infrastructure/database/sche
 import { eq, and } from "drizzle-orm";
 import { PaymentProviderFactory } from "@/infrastructure/payments/payment-provider.factory";
 import { financialLedgerService } from "@/core/ledger/ledger.service";
+import { idempotencyService } from "@/core/idempotency/idempotency.service";
 import { PaymentError, NotFoundError, AuthorizationError, ConflictError } from "@/core/errors/app-error";
 import { redis } from "@/infrastructure/redis/client";
 import { logger } from "@/core/observability/logger";
@@ -52,7 +53,7 @@ export class PaymentService {
       description: `Payment for Booking ${booking.bookingNumber}`,
     });
 
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [insertedPayment] = await tx
         .insert(payments)
         .values({

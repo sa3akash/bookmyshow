@@ -1,4 +1,4 @@
-import { describe, expect, test, spyOn } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { idempotencyService } from "@/core/idempotency/idempotency.service";
 import { ConflictError } from "@/core/errors/app-error";
 
@@ -34,13 +34,18 @@ describe("IDEMPOTENCY SUBSYSTEM TEST SUITE", () => {
 
     await idempotencyService.save(testKey, userId, payload1, 200, { success: true });
 
-    expect(async () => {
+    let caughtError: any = null;
+    try {
       await idempotencyService.get(testKey, userId, payload2);
-    }).toThrow(ConflictError);
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(ConflictError);
   });
 
   test("IdempotencyService returns null for non-existent or different user key", async () => {
-    const res1 = await idempotencyService.get("non-existent-key", "u-1");
+    const res1 = await idempotencyService.get("non-existent-key-xyz", "u-1");
     expect(res1).toBeNull();
   });
 });
