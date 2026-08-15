@@ -1,760 +1,1013 @@
 "use client";
 
-import * as React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
+  Grid3X3,
+  Sliders,
+  Check,
   Plus,
   Minus,
   Trash2,
-  ZoomIn,
-  ZoomOut,
+  DollarSign,
+  Tv,
+  Eye,
   RotateCcw,
+  Sparkles,
   Lock,
   Unlock,
-  Armchair,
-  DollarSign,
-  Layers,
-  Sparkles,
-  CheckCircle2,
-  SlidersHorizontal,
-  Grid,
-  Maximize2,
-  CheckSquare,
-  Square,
-  Tv,
-  Volume2,
-  Info,
   Save,
   Building2,
   Film,
-  Eye,
-  Settings2,
-  Wand2,
+  Filter,
   RefreshCw,
-  ShoppingBag,
+  CheckCircle2,
+  Paintbrush,
+  Maximize2,
+  Grid,
+  Layers,
+  Wand2,
+  Edit3,
+  TrendingUp,
+  Percent,
+  Copy,
+  FileCode,
+  Volume2,
   Download,
   Upload,
+  Zap,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { formatCurrency, cn } from "@/lib/utils";
+import { useTicketingStore } from "../../stores/ticketing.store";
+import { useAuthStore } from "../../stores/auth.store";
+import { can as checkPermission } from "../../lib/auth/permissions";
+import { SeatLayout, SeatCategory, SeatItem, SeatPhysicalStatus } from "../../types";
+import { PageHeader } from "../../components/shared/PageHeader";
+import { Badge } from "../../components/shared/Badge";
+import { Can } from "../../components/shared/Can";
+import { formatCurrency } from "../../lib/utils";
+import { useCitiesQuery, useVenuesQuery } from "../../hooks/useAdminQueries";
+import { apiClient } from "../../lib/api/client";
 
-export type SeatCategory = "REGULAR" | "VIP" | "RECLINER" | "COUPLE" | "ACCESSIBLE" | "FOUR_DX";
-export type SeatStatus = "AVAILABLE" | "BLOCKED" | "HELD" | "BOOKED";
+export const SeatLayoutEditor: React.FC = () => {
+  const { seatLayouts, updateSeatLayout, toggleSeatStatus, updateSeatPrice } = useTicketingStore();
+  const user = useAuthStore((state) => state.user);
 
-export interface SeatItem {
-  id: string;
-  row: string;
-  number: number;
-  category: SeatCategory;
-  priceBDT: number;
-  status: SeatStatus;
-  sectionName: string;
-  isAisleRight?: boolean;
-}
+  // Dynamic Cities & Venues API Query Hooks
+  const { data: citiesList = [] } = useCitiesQuery();
+  const [selectedCityId, setSelectedCityId] = useState<string>("");
 
-export interface TheaterOption {
-  id: string;
-  name: string;
-  city: string;
-  screens: {
-    id: string;
-    name: string;
-    type: "IMAX_3D" | "FOUR_DX" | "DOLBY_ATMOS" | "VIP_SUITE" | "REGULAR_2D";
-    rowsCount: number;
-    seatsPerRow: number;
-    aisleCol: number;
-  }[];
-}
+  useEffect(() => {
+    if (citiesList.length > 0 && (!selectedCityId || !citiesList.some((c) => c.id === selectedCityId))) {
+      setSelectedCityId(citiesList[0].id);
+    }
+  }, [citiesList, selectedCityId]);
 
-const THEATERS_DATA: TheaterOption[] = [
-  {
-    id: "v-1",
-    name: "Star Cineplex - Bashundhara City",
-    city: "Dhaka",
-    screens: [
-      { id: "s-1", name: "Hall 1 (IMAX 3D Laser)", type: "IMAX_3D", rowsCount: 10, seatsPerRow: 18, aisleCol: 9 },
-      { id: "s-2", name: "Hall 2 (VIP Recliner Suite)", type: "VIP_SUITE", rowsCount: 4, seatsPerRow: 8, aisleCol: 4 },
-      { id: "s-3", name: "Hall 3 (Dolby Atmos 2D)", type: "DOLBY_ATMOS", rowsCount: 8, seatsPerRow: 14, aisleCol: 7 },
-      { id: "s-4", name: "Hall 4 (Standard 2D)", type: "REGULAR_2D", rowsCount: 7, seatsPerRow: 12, aisleCol: 6 },
-    ],
-  },
-  {
-    id: "v-2",
-    name: "Blockbuster Cinemas - Jamuna Future Park",
-    city: "Dhaka",
-    screens: [
-      { id: "s-5", name: "Cinema 1 (Atmosphere 3D)", type: "DOLBY_ATMOS", rowsCount: 9, seatsPerRow: 16, aisleCol: 8 },
-      { id: "s-6", name: "Cinema 2 (4DX Motion Hall)", type: "FOUR_DX", rowsCount: 6, seatsPerRow: 12, aisleCol: 6 },
-      { id: "s-7", name: "Cinema 3 (Executive Hall)", type: "VIP_SUITE", rowsCount: 5, seatsPerRow: 10, aisleCol: 5 },
-    ],
-  },
-  {
-    id: "v-3",
-    name: "Silver Screen - Finlay Square",
-    city: "Chattogram",
-    screens: [
-      { id: "s-8", name: "Platinum Recliner Hall", type: "VIP_SUITE", rowsCount: 5, seatsPerRow: 10, aisleCol: 5 },
-      { id: "s-9", name: "Screen A (Standard 2D)", type: "REGULAR_2D", rowsCount: 8, seatsPerRow: 14, aisleCol: 7 },
-    ],
-  },
-];
+  const { data: venuesList = [], isFetching: isVenuesFetching } = useVenuesQuery(selectedCityId);
 
-const CATEGORY_CONFIG: Record<
-  SeatCategory,
-  { name: string; price: number; bg: string; border: string; text: string; glow: string; icon: string }
-> = {
-  RECLINER: { name: "Recliner Plush", price: 950, bg: "bg-purple-950/70", border: "border-purple-500/60", text: "text-purple-300", glow: "shadow-purple-500/30", icon: "👑" },
-  VIP: { name: "VIP Gold", price: 750, bg: "bg-amber-950/70", border: "border-amber-500/60", text: "text-amber-300", glow: "shadow-amber-500/30", icon: "💎" },
-  FOUR_DX: { name: "4DX Motion", price: 1100, bg: "bg-cyan-950/70", border: "border-cyan-500/60", text: "text-cyan-300", glow: "shadow-cyan-500/30", icon: "🚀" },
-  COUPLE: { name: "Couple Sofa", price: 1200, bg: "bg-rose-950/70", border: "border-rose-500/60", text: "text-rose-300", glow: "shadow-rose-500/30", icon: "💖" },
-  ACCESSIBLE: { name: "Wheelchair", price: 450, bg: "bg-sky-950/70", border: "border-sky-500/60", text: "text-sky-300", glow: "shadow-sky-500/30", icon: "♿" },
-  REGULAR: { name: "Regular", price: 450, bg: "bg-slate-900/80", border: "border-slate-700", text: "text-slate-300", glow: "shadow-slate-500/10", icon: "💺" },
-};
+  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
+  const [selectedScreenId, setSelectedScreenId] = useState<string>("");
 
-export function SeatLayoutEditor() {
-  // Theater & Screen Selection State
-  const [selectedTheaterId, setSelectedTheaterId] = React.useState<string>(THEATERS_DATA[0].id);
-  const [selectedScreenId, setSelectedScreenId] = React.useState<string>(THEATERS_DATA[0].screens[0].id);
-
-  // Generator Config Parameters
-  const [rows, setRows] = React.useState<string[]>([]);
-  const [seatsPerRow, setSeatsPerRow] = React.useState(14);
-  const [centerAisleAfter, setCenterAisleAfter] = React.useState(7);
-  const [isCurvedScreen, setIsCurvedScreen] = React.useState(true);
-  const [mode, setMode] = React.useState<"EDITOR" | "PREVIEW">("EDITOR");
-
-  // Seats State & Selection
-  const [seats, setSeats] = React.useState<SeatItem[]>([]);
-  const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
-  const [customerBookedIds, setCustomerBookedIds] = React.useState<string[]>([]);
-  const [zoom, setZoom] = React.useState(1.0);
-  const [customPriceInput, setCustomPriceInput] = React.useState<string>("600");
-  const [savedSuccess, setSavedSuccess] = React.useState(false);
-
-  // Derived Active Objects
-  const activeTheater = THEATERS_DATA.find((t) => t.id === selectedTheaterId) || THEATERS_DATA[0];
-  const activeScreen = activeTheater.screens.find((s) => s.id === selectedScreenId) || activeTheater.screens[0];
-
-  // Dynamic Generator Algorithm based on Theater & Screen Specifications
-  const generateSeatsForScreen = React.useCallback(
-    (screenType: string, rowsCount: number, colsCount: number, aisleGap: number) => {
-      const generatedRows = Array.from({ length: rowsCount }, (_, i) => String.fromCharCode(65 + i));
-      setRows(generatedRows);
-      setSeatsPerRow(colsCount);
-      setCenterAisleAfter(aisleGap);
-
-      const generatedSeats: SeatItem[] = [];
-
-      generatedRows.forEach((row, rowIndex) => {
-        for (let num = 1; num <= colsCount; num++) {
-          let cat: SeatCategory = "REGULAR";
-          let price = 450;
-          let section = "General Ground Section";
-
-          if (screenType === "IMAX_3D") {
-            if (rowIndex <= 1) {
-              cat = "RECLINER";
-              price = 1200;
-              section = "IMAX Premium Recliner Tier";
-            } else if (rowIndex <= 4) {
-              cat = "VIP";
-              price = 850;
-              section = "IMAX Gold Tier";
-            } else {
-              cat = "REGULAR";
-              price = 550;
-              section = "IMAX Standard Tier";
-            }
-          } else if (screenType === "VIP_SUITE") {
-            cat = "RECLINER";
-            price = 1500;
-            section = "Private VIP Suite";
-            if (row === "D") {
-              cat = "COUPLE";
-              price = 2500;
-              section = "VIP Couple Lounger";
-            }
-          } else if (screenType === "FOUR_DX") {
-            cat = "FOUR_DX";
-            price = 1100;
-            section = "4DX Motion Pod Section";
-          } else if (screenType === "DOLBY_ATMOS") {
-            if (rowIndex <= 1) {
-              cat = "RECLINER";
-              price = 950;
-              section = "Balcony Recliner Section";
-            } else if (rowIndex <= 3) {
-              cat = "VIP";
-              price = 750;
-              section = "Executive VIP Section";
-            } else {
-              cat = "REGULAR";
-              price = 450;
-              section = "Main Floor Section";
-            }
-          } else {
-            if (rowIndex === 0) {
-              cat = "VIP";
-              price = 600;
-              section = "Executive Row";
-            } else {
-              cat = "REGULAR";
-              price = 450;
-              section = "Standard Floor";
-            }
-          }
-
-          // Corner Wheelchair Slot
-          if (rowIndex === generatedRows.length - 1 && (num === 1 || num === colsCount)) {
-            cat = "ACCESSIBLE";
-            price = 450;
-            section = "Wheelchair Accessible";
-          }
-
-          generatedSeats.push({
-            id: `${row}-${num}`,
-            row,
-            number: num,
-            category: cat,
-            priceBDT: price,
-            status: "AVAILABLE",
-            sectionName: section,
-            isAisleRight: num === aisleGap,
-          });
+  useEffect(() => {
+    if (venuesList.length > 0) {
+      if (!selectedVenueId || !venuesList.some((v) => v.id === selectedVenueId)) {
+        setSelectedVenueId(venuesList[0].id);
+        const screens = venuesList[0].screens || [];
+        if (screens.length > 0) {
+          setSelectedScreenId(screens[0].id);
         }
-      });
+      }
+    }
+  }, [venuesList, selectedVenueId]);
 
-      setSeats(generatedSeats);
-      setSelectedSeatIds([]);
-      setCustomerBookedIds([]);
-    },
-    []
-  );
+  const activeVenue = venuesList.find((v) => v.id === selectedVenueId) || venuesList[0];
+  const activeScreensList = activeVenue?.screens || [
+    { id: "s-101", name: "Hall 1 (IMAX 3D Laser)", supportedFormats: ["IMAX", "3D"], totalSeats: 180 },
+    { id: "s-102", name: "Hall 2 (VIP Recliner Suite)", supportedFormats: ["VIP", "2D"], totalSeats: 60 },
+  ];
+  const activeScreen = activeScreensList.find((s: any) => s.id === selectedScreenId) || activeScreensList[0];
 
-  // Trigger seat generation when theater/screen changes
-  React.useEffect(() => {
-    generateSeatsForScreen(activeScreen.type, activeScreen.rowsCount, activeScreen.seatsPerRow, activeScreen.aisleCol);
-  }, [selectedTheaterId, selectedScreenId, activeScreen, generateSeatsForScreen]);
+  // Editor Navigation Tab: canvas | pricing | geometry | json
+  const [activeTab, setActiveTab] = useState<"canvas" | "pricing" | "geometry" | "json">("canvas");
 
-  // Selection Logic
-  const toggleSelectSeat = (id: string) => {
+  // Editor State
+  const [selectedLayoutId, setSelectedLayoutId] = useState<string>(seatLayouts[0]?.id || "layout-imax-hyd-1");
+  const [activeTool, setActiveTool] = useState<SeatCategory | "BLOCKED" | "WALKWAY">("PLATINUM");
+  const [filterCategory, setFilterCategory] = useState<SeatCategory | "ALL">("ALL");
+  const [hoveredSeat, setHoveredSeat] = useState<SeatItem | null>(null);
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [mode, setMode] = useState<"EDITOR" | "PREVIEW">("EDITOR");
+  const [customerBookedIds, setCustomerBookedIds] = useState<string[]>([]);
+  const [isCurvedScreen, setIsCurvedScreen] = useState(true);
+  const [jsonCopied, setJsonCopied] = useState(false);
+
+  // Pricing Surge Multipliers
+  const [weekendMultiplier, setWeekendMultiplier] = useState<number>(1.2);
+  const [holidayMultiplier, setHolidayMultiplier] = useState<number>(1.5);
+
+  // Category Price State (editable prices for seat types)
+  const [categoryPrices, setCategoryPrices] = useState<Record<SeatCategory, number>>({
+    RECLINER: 850,
+    PLATINUM: 550,
+    GOLD: 420,
+    SILVER: 320,
+    VIP: 990,
+    COUPLE: 1200,
+    ACCESSIBLE: 320,
+  });
+
+  const currentLayout = seatLayouts.find((l) => l.id === selectedLayoutId) || seatLayouts[0];
+
+  if (!currentLayout) return null;
+
+  const rows = Array.from(new Set(currentLayout.seats.map((s) => s.row))).sort();
+  const colsCount = currentLayout.colsCount || 14;
+  const cols = Array.from({ length: colsCount }, (_, i) => i + 1);
+
+  // Category Configuration
+  const categoryConfig: Record<SeatCategory, { name: string; color: string; border: string; bg: string; icon: string }> = {
+    RECLINER: { name: "Royal Recliner", color: "#8b5cf6", border: "border-purple-500", bg: "bg-purple-950/80 text-purple-200", icon: "👑" },
+    PLATINUM: { name: "Platinum Prime", color: "#3b82f6", border: "border-blue-500", bg: "bg-blue-950/80 text-blue-200", icon: "💎" },
+    GOLD: { name: "Gold Executive", color: "#eab308", border: "border-amber-500", bg: "bg-amber-950/80 text-amber-200", icon: "🌟" },
+    SILVER: { name: "Silver Standard", color: "#64748b", border: "border-slate-500", bg: "bg-slate-900 text-slate-300", icon: "💺" },
+    VIP: { name: "VIP Club", color: "#ec4899", border: "border-pink-500", bg: "bg-pink-950/80 text-pink-200", icon: "🔥" },
+    COUPLE: { name: "Couple Lounger", color: "#f43f5e", border: "border-rose-500", bg: "bg-rose-950/80 text-rose-200", icon: "💖" },
+    ACCESSIBLE: { name: "Accessible Space", color: "#10b981", border: "border-emerald-500", bg: "bg-emerald-950/80 text-emerald-200", icon: "♿" },
+  };
+
+  // Update Category Price and sync layout
+  const handleCategoryPriceChange = (cat: SeatCategory, newPrice: number) => {
+    setCategoryPrices((prev) => ({ ...prev, [cat]: newPrice }));
+    const updatedSeats = currentLayout.seats.map((s) =>
+      s.category === cat ? { ...s, basePrice: newPrice } : s
+    );
+    updateSeatLayout(currentLayout.id, { seats: updatedSeats });
+  };
+
+  // Toggle Seat Selection
+  const toggleSeatSelection = (seatId: string) => {
+    setSelectedSeatIds((prev) =>
+      prev.includes(seatId) ? prev.filter((id) => id !== seatId) : [...prev, seatId]
+    );
+  };
+
+  // Click single seat painter
+  const handleSeatClick = (seat: SeatItem) => {
     if (mode === "PREVIEW") {
       setCustomerBookedIds((prev) =>
-        prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+        prev.includes(seat.id) ? prev.filter((i) => i !== seat.id) : [...prev, seat.id]
       );
       return;
     }
-    setSelectedSeatIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
 
-  const selectRow = (rowLabel: string) => {
-    if (mode === "PREVIEW") return;
-    const rowSeatIds = seats.filter((s) => s.row === rowLabel).map((s) => s.id);
-    const allSelected = rowSeatIds.every((id) => selectedSeatIds.includes(id));
-    if (allSelected) {
-      setSelectedSeatIds((prev) => prev.filter((id) => !rowSeatIds.includes(id)));
-    } else {
-      setSelectedSeatIds((prev) => Array.from(new Set([...prev, ...rowSeatIds])));
+    if (!checkPermission(user, "seat:update")) return;
+
+    if (activeTool === "BLOCKED") {
+      toggleSeatStatus(currentLayout.id, seat.id);
+      return;
     }
-  };
 
-  const selectColumn = (colNum: number) => {
-    if (mode === "PREVIEW") return;
-    const colSeatIds = seats.filter((s) => s.number === colNum).map((s) => s.id);
-    const allSelected = colSeatIds.every((id) => selectedSeatIds.includes(id));
-    if (allSelected) {
-      setSelectedSeatIds((prev) => prev.filter((id) => !colSeatIds.includes(id)));
-    } else {
-      setSelectedSeatIds((prev) => Array.from(new Set([...prev, ...colSeatIds])));
+    if (activeTool === "WALKWAY") {
+      const updatedSeats = currentLayout.seats.map((s) => {
+        if (s.id === seat.id) {
+          const isWalkway = s.type === "WALKWAY";
+          return {
+            ...s,
+            type: isWalkway ? ("STANDARD" as const) : ("WALKWAY" as const),
+            label: isWalkway ? `${s.row}${s.col}` : "",
+          };
+        }
+        return s;
+      });
+      updateSeatLayout(currentLayout.id, { seats: updatedSeats });
+      return;
     }
+
+    const updatedSeats = currentLayout.seats.map((s) => {
+      if (s.id === seat.id) {
+        let seatType: SeatItem["type"] = "STANDARD";
+        if (activeTool === "ACCESSIBLE") seatType = "WHEELCHAIR";
+        else if (activeTool === "RECLINER") seatType = "RECLINER";
+        else if (activeTool === "COUPLE") seatType = "COUPLE_LEFT";
+
+        return {
+          ...s,
+          category: activeTool as SeatCategory,
+          basePrice: categoryPrices[activeTool as SeatCategory] || 350,
+          type: seatType,
+        };
+      }
+      return s;
+    });
+
+    updateSeatLayout(currentLayout.id, { seats: updatedSeats });
   };
 
-  const selectAll = () => {
-    if (selectedSeatIds.length === seats.length) {
-      setSelectedSeatIds([]);
-    } else {
-      setSelectedSeatIds(seats.map((s) => s.id));
-    }
+  // Row Painter (paint entire row)
+  const paintEntireRow = (rowLabel: string) => {
+    if (!checkPermission(user, "seat:update") || mode === "PREVIEW") return;
+
+    const updatedSeats = currentLayout.seats.map((s) => {
+      if (s.row !== rowLabel) return s;
+
+      if (activeTool === "BLOCKED") {
+        return { ...s, status: ("BLOCKED" as const) };
+      }
+      if (activeTool === "WALKWAY") {
+        return { ...s, type: ("WALKWAY" as const), label: "" };
+      }
+
+      let seatType: SeatItem["type"] = "STANDARD";
+      if (activeTool === "ACCESSIBLE") seatType = "WHEELCHAIR";
+      else if (activeTool === "RECLINER") seatType = "RECLINER";
+      else if (activeTool === "COUPLE") seatType = "COUPLE_LEFT";
+
+      return {
+        ...s,
+        category: activeTool as SeatCategory,
+        basePrice: categoryPrices[activeTool as SeatCategory] || 350,
+        type: seatType,
+        status: ("AVAILABLE" as const),
+      };
+    });
+
+    updateSeatLayout(currentLayout.id, { seats: updatedSeats });
   };
 
-  const applyCategoryToSelected = (category: SeatCategory, price?: number) => {
-    const targetPrice = price ?? CATEGORY_CONFIG[category].price;
-    setSeats((prev) =>
-      prev.map((s) => (selectedSeatIds.includes(s.id) ? { ...s, category, priceBDT: targetPrice } : s))
-    );
-    setSelectedSeatIds([]);
+  // Column Painter (paint entire column)
+  const paintEntireColumn = (colNum: number) => {
+    if (!checkPermission(user, "seat:update") || mode === "PREVIEW") return;
+
+    const updatedSeats = currentLayout.seats.map((s) => {
+      if (s.col !== colNum) return s;
+
+      if (activeTool === "BLOCKED") {
+        return { ...s, status: ("BLOCKED" as const) };
+      }
+      if (activeTool === "WALKWAY") {
+        return { ...s, type: ("WALKWAY" as const), label: "" };
+      }
+
+      let seatType: SeatItem["type"] = "STANDARD";
+      if (activeTool === "ACCESSIBLE") seatType = "WHEELCHAIR";
+      else if (activeTool === "RECLINER") seatType = "RECLINER";
+
+      return {
+        ...s,
+        category: activeTool as SeatCategory,
+        basePrice: categoryPrices[activeTool as SeatCategory] || 350,
+        type: seatType,
+        status: ("AVAILABLE" as const),
+      };
+    });
+
+    updateSeatLayout(currentLayout.id, { seats: updatedSeats });
   };
 
-  const applyCustomPriceToSelected = () => {
-    const parsed = parseFloat(customPriceInput);
-    if (isNaN(parsed) || parsed <= 0) return;
-    setSeats((prev) =>
-      prev.map((s) => (selectedSeatIds.includes(s.id) ? { ...s, priceBDT: parsed } : s))
-    );
-    setSelectedSeatIds([]);
+  // Auto-Generate Layout by Category Tiers
+  const autoGenerateLayoutByTiers = () => {
+    if (!checkPermission(user, "seat:update")) return;
+
+    const updatedSeats = currentLayout.seats.map((s) => {
+      const rowIndex = rows.indexOf(s.row);
+      let cat: SeatCategory = "SILVER";
+
+      if (rowIndex <= 1) cat = "RECLINER";
+      else if (rowIndex <= 3) cat = "PLATINUM";
+      else if (rowIndex <= 5) cat = "GOLD";
+      else cat = "SILVER";
+
+      if (s.type === "WALKWAY") return s;
+
+      return {
+        ...s,
+        category: cat,
+        basePrice: categoryPrices[cat] || 350,
+        status: ("AVAILABLE" as const),
+      };
+    });
+
+    updateSeatLayout(currentLayout.id, { seats: updatedSeats });
   };
 
-  const applyStatusToSelected = (status: SeatStatus) => {
-    setSeats((prev) =>
-      prev.map((s) => (selectedSeatIds.includes(s.id) ? { ...s, status } : s))
-    );
-    setSelectedSeatIds([]);
+  // Add / Remove Row Controls
+  const addRowToGrid = () => {
+    const nextRowChar = String.fromCharCode(65 + rows.length);
+    const newSeats: SeatItem[] = cols.map((c) => ({
+      id: `${currentLayout.id}-${nextRowChar}-${c}`,
+      row: nextRowChar,
+      col: c,
+      label: `${nextRowChar}${c}`,
+      category: "SILVER",
+      basePrice: categoryPrices.SILVER,
+      status: "AVAILABLE",
+      type: "STANDARD",
+    }));
+
+    updateSeatLayout(currentLayout.id, {
+      rowsCount: rows.length + 1,
+      totalSeats: currentLayout.totalSeats + colsCount,
+      seats: [...currentLayout.seats, ...newSeats],
+    });
   };
 
-  const addRow = () => {
-    const nextChar = String.fromCharCode(65 + rows.length);
-    const newRows = [...rows, nextChar];
-    generateSeatsForScreen(activeScreen.type, newRows.length, seatsPerRow, centerAisleAfter);
-  };
-
-  const removeRow = () => {
+  const removeRowFromGrid = () => {
     if (rows.length <= 1) return;
-    generateSeatsForScreen(activeScreen.type, rows.length - 1, seatsPerRow, centerAisleAfter);
+    const lastRowChar = rows[rows.length - 1];
+    const filteredSeats = currentLayout.seats.filter((s) => s.row !== lastRowChar);
+    updateSeatLayout(currentLayout.id, {
+      rowsCount: rows.length - 1,
+      totalSeats: filteredSeats.filter((s) => s.type !== "WALKWAY").length,
+      seats: filteredSeats,
+    });
   };
 
-  const addCol = () => {
-    generateSeatsForScreen(activeScreen.type, rows.length, seatsPerRow + 1, centerAisleAfter);
+  // Add / Remove Col Controls
+  const addColToGrid = () => {
+    const newColNum = colsCount + 1;
+    const newSeats: SeatItem[] = rows.map((r) => ({
+      id: `${currentLayout.id}-${r}-${newColNum}`,
+      row: r,
+      col: newColNum,
+      label: `${r}${newColNum}`,
+      category: "SILVER",
+      basePrice: categoryPrices.SILVER,
+      status: "AVAILABLE",
+      type: "STANDARD",
+    }));
+
+    updateSeatLayout(currentLayout.id, {
+      colsCount: newColNum,
+      totalSeats: currentLayout.totalSeats + rows.length,
+      seats: [...currentLayout.seats, ...newSeats],
+    });
   };
 
-  const removeCol = () => {
-    if (seatsPerRow <= 2) return;
-    generateSeatsForScreen(activeScreen.type, rows.length, seatsPerRow - 1, centerAisleAfter);
+  const removeColFromGrid = () => {
+    if (colsCount <= 2) return;
+    const filteredSeats = currentLayout.seats.filter((s) => s.col !== colsCount);
+    updateSeatLayout(currentLayout.id, {
+      colsCount: colsCount - 1,
+      totalSeats: filteredSeats.filter((s) => s.type !== "WALKWAY").length,
+      seats: filteredSeats,
+    });
   };
 
-  const saveLayout = () => {
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+  const saveLayoutToServer = async () => {
+    setIsSaving(true);
+    try {
+      if (activeVenue && activeScreen) {
+        await apiClient.post("/screens/layout", {
+          venueId: activeVenue.id,
+          name: activeScreen.name,
+          totalSeats: currentLayout.totalSeats,
+          rows: rows.map((r) => ({
+            rowLabel: r,
+            seatsCount: colsCount,
+          })),
+        }).catch(() => null);
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Metrics
-  const totalCapacity = seats.length;
-  const totalBlocked = seats.filter((s) => s.status === "BLOCKED").length;
-  const totalSellable = totalCapacity - totalBlocked;
-  const totalHouseGross = seats.reduce((acc, s) => acc + (s.status !== "BLOCKED" ? s.priceBDT : 0), 0);
+  // Metrics Calculation
+  const totalRevenuePotential = currentLayout.seats
+    .filter((s) => s.type !== "WALKWAY" && s.status !== "BLOCKED")
+    .reduce((sum, s) => sum + s.basePrice, 0);
 
-  const previewTotalBDT = customerBookedIds.reduce((acc, id) => {
-    const s = seats.find((item) => item.id === id);
-    return acc + (s ? s.priceBDT : 0);
+  const weekendRevenuePotential = totalRevenuePotential * weekendMultiplier;
+  const holidayRevenuePotential = totalRevenuePotential * holidayMultiplier;
+
+  const activeSeatsCount = currentLayout.seats.filter((s) => s.type !== "WALKWAY" && s.status !== "BLOCKED").length;
+  const blockedSeatsCount = currentLayout.seats.filter((s) => s.status === "BLOCKED").length;
+
+  const previewSelectedTotal = customerBookedIds.reduce((acc, id) => {
+    const s = currentLayout.seats.find((item) => item.id === id);
+    return acc + (s ? s.basePrice : 0);
   }, 0);
 
+  // Filtered Category Seat Count & Revenue
+  const filteredCategoryCount = currentLayout.seats.filter(
+    (s) => s.type !== "WALKWAY" && (filterCategory === "ALL" || s.category === filterCategory)
+  ).length;
+
+  const filteredCategoryRevenue = currentLayout.seats
+    .filter((s) => s.type !== "WALKWAY" && s.status !== "BLOCKED" && (filterCategory === "ALL" || s.category === filterCategory))
+    .reduce((acc, s) => acc + s.basePrice, 0);
+
+  const exportSchemaJSON = JSON.stringify(
+    {
+      theaterId: activeVenue?.id,
+      theaterName: activeVenue?.name,
+      screenId: activeScreen?.id,
+      screenName: activeScreen?.name,
+      totalSeats: currentLayout.totalSeats,
+      rowsCount: rows.length,
+      columnsCount: colsCount,
+      isCurvedScreen,
+      pricingRules: {
+        weekendMultiplier,
+        holidayMultiplier,
+      },
+      seatsLayout: currentLayout.seats.map((s) => ({
+        id: s.id,
+        row: s.row,
+        col: s.col,
+        label: s.label,
+        category: s.category,
+        basePrice: s.basePrice,
+        status: s.status,
+        type: s.type,
+      })),
+    },
+    null,
+    2
+  );
+
+  const copyJSONPayload = () => {
+    navigator.clipboard.writeText(exportSchemaJSON);
+    setJsonCopied(true);
+    setTimeout(() => setJsonCopied(false), 2000);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Save Success Alert */}
-      {savedSuccess && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center justify-between shadow-lg shadow-emerald-500/5 animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" /> Layout & seat pricing grid for <strong>{activeTheater.name} - {activeScreen.name}</strong> saved successfully!
-          </div>
-        </div>
-      )}
-
-      {/* Dynamic Theater & Screen Selector Header */}
-      <div className="bg-card/90 p-5 rounded-2xl border border-border/80 shadow-md backdrop-blur-md space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-black tracking-tight text-foreground">Dynamic Multiplex Generator</h2>
-            </div>
-            <p className="text-xs text-muted-foreground">Select theater branch and screen specifications to auto-generate seat matrices.</p>
-          </div>
-
-          {/* Mode Switcher */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-border/80 bg-muted/30 p-1">
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Page Header */}
+      <PageHeader
+        title="Visual Seat Layout & Tier Matrix Designer"
+        description="Studio auditorium seat map editor, tier categorizations, surge rules, and physical lock controls."
+        actions={
+          <div className="flex items-center gap-3">
+            {/* Mode Switcher */}
+            <div className="flex items-center rounded-lg border border-slate-700 bg-slate-900 p-1">
               <button
                 onClick={() => setMode("EDITOR")}
-                className={cn(
-                  "px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer flex items-center gap-1.5",
-                  mode === "EDITOR" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                  mode === "EDITOR" ? "bg-rose-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
+                }`}
               >
-                <Settings2 className="h-3.5 w-3.5" /> Admin Generator
+                Designer Mode
               </button>
               <button
                 onClick={() => setMode("PREVIEW")}
-                className={cn(
-                  "px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer flex items-center gap-1.5",
-                  mode === "PREVIEW" ? "bg-emerald-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                  mode === "PREVIEW" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
+                }`}
               >
-                <Eye className="h-3.5 w-3.5" /> Customer Booking Preview
+                Customer Preview
               </button>
             </div>
-          </div>
-        </div>
 
-        {/* Theater Branch & Screen Selectors */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="text-xs font-bold text-foreground block mb-1.5 flex items-center gap-1">
-              <Building2 className="h-3.5 w-3.5 text-primary" /> Cinema Branch Location
-            </label>
-            <select
-              value={selectedTheaterId}
-              onChange={(e) => {
-                const newT = THEATERS_DATA.find((t) => t.id === e.target.value) || THEATERS_DATA[0];
-                setSelectedTheaterId(newT.id);
-                setSelectedScreenId(newT.screens[0].id);
-              }}
-              className="w-full h-9 rounded-lg border border-input bg-background/60 px-3 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <button
+              onClick={saveLayoutToServer}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md cursor-pointer transition-all disabled:opacity-50"
             >
-              {THEATERS_DATA.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.city})
-                </option>
-              ))}
-            </select>
+              <Save className="h-3.5 w-3.5" />
+              <span>{isSaving ? "Saving..." : "Save Server Layout"}</span>
+            </button>
           </div>
+        }
+      />
 
-          <div>
-            <label className="text-xs font-bold text-foreground block mb-1.5 flex items-center gap-1">
-              <Film className="h-3.5 w-3.5 text-emerald-400" /> Screen & Hall Format
-            </label>
-            <select
-              value={selectedScreenId}
-              onChange={(e) => setSelectedScreenId(e.target.value)}
-              className="w-full h-9 rounded-lg border border-input bg-background/60 px-3 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {activeTheater.screens.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} • {s.type.replace("_", " ")}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-foreground block mb-1.5 flex items-center gap-1">
-              <Wand2 className="h-3.5 w-3.5 text-amber-400" /> Preset Generator Engine
-            </label>
-            <Button
-              onClick={() => generateSeatsForScreen(activeScreen.type, activeScreen.rowsCount, activeScreen.seatsPerRow, activeScreen.aisleCol)}
-              variant="outline"
-              className="w-full h-9 text-xs font-bold gap-1.5 text-primary border-primary/30 hover:bg-primary/10"
-            >
-              <RefreshCw className="h-3.5 w-3.5" /> Re-Generate Default Grid
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Editor Controls Bar (Active only in EDITOR mode) */}
-      {mode === "EDITOR" && (
-        <div className="bg-card/90 p-4 rounded-2xl border border-border/80 shadow-md space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Grid Modifier Controls */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/60">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase px-2">Rows:</span>
-                <Button variant="ghost" size="icon-sm" onClick={removeRow} title="Remove Row">
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <span className="text-xs font-bold text-foreground px-1">{rows.length}</span>
-                <Button variant="ghost" size="icon-sm" onClick={addRow} title="Add Row">
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/60">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase px-2">Cols:</span>
-                <Button variant="ghost" size="icon-sm" onClick={removeCol} title="Remove Column">
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <span className="text-xs font-bold text-foreground px-1">{seatsPerRow}</span>
-                <Button variant="ghost" size="icon-sm" onClick={addCol} title="Add Column">
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/60 bg-muted/30 text-xs font-semibold">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold">Screen Arc:</span>
-                <button
-                  onClick={() => setIsCurvedScreen(!isCurvedScreen)}
-                  className="text-xs font-bold text-primary hover:underline cursor-pointer"
-                >
-                  {isCurvedScreen ? "Curved IMAX Arc" : "Flat Screen"}
-                </button>
-              </div>
-            </div>
-
-            {/* Canvas Zoom & Actions */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center bg-muted/40 p-1 rounded-lg border border-border/60">
-                <Button variant="ghost" size="icon-sm" onClick={() => setZoom((z) => Math.min(z + 0.1, 1.4))} title="Zoom In">
-                  <ZoomIn className="h-3.5 w-3.5" />
-                </Button>
-                <span className="text-[10px] font-mono font-bold px-2">{Math.round(zoom * 100)}%</span>
-                <Button variant="ghost" size="icon-sm" onClick={() => setZoom((z) => Math.max(z - 0.1, 0.6))} title="Zoom Out">
-                  <ZoomOut className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => setZoom(1.0)} title="Reset Zoom">
-                  <RotateCcw className="h-3 w-3" />
-                </Button>
-              </div>
-
-              <Button onClick={saveLayout} size="sm" className="h-8 text-xs font-bold gap-1.5 shadow-md">
-                <Save className="h-3.5 w-3.5" /> Save Configuration
-              </Button>
-            </div>
-          </div>
-
-          {/* Quick Category & Status Assigners */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
-            <span className="text-xs font-bold text-muted-foreground mr-1">Assign Category:</span>
-            {(Object.keys(CATEGORY_CONFIG) as SeatCategory[]).map((catKey) => {
-              const cfg = CATEGORY_CONFIG[catKey];
-              const disabled = selectedSeatIds.length === 0;
-
-              return (
-                <button
-                  key={catKey}
-                  disabled={disabled}
-                  onClick={() => applyCategoryToSelected(catKey)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-bold transition-all cursor-pointer shadow-xs",
-                    cfg.bg,
-                    cfg.border,
-                    cfg.text,
-                    disabled ? "opacity-30 cursor-not-allowed" : "hover:scale-105 active:scale-95"
-                  )}
-                >
-                  <span>{cfg.icon}</span>
-                  <span>{cfg.name}</span>
-                  <span className="opacity-70 font-mono text-[9px]">({formatCurrency(cfg.price)})</span>
-                </button>
-              );
-            })}
-
-            <div className="h-4 w-px bg-border/80 mx-1 hidden sm:block" />
-
-            <Button
-              disabled={selectedSeatIds.length === 0}
-              variant="destructive"
-              size="xs"
-              onClick={() => applyStatusToSelected("BLOCKED")}
-              className="h-7 text-[11px] font-bold gap-1"
-            >
-              <Lock className="h-3 w-3" /> Block
-            </Button>
-
-            <Button
-              disabled={selectedSeatIds.length === 0}
-              variant="outline"
-              size="xs"
-              onClick={() => applyStatusToSelected("AVAILABLE")}
-              className="h-7 text-[11px] font-bold gap-1 text-emerald-400 border-emerald-500/30"
-            >
-              <Unlock className="h-3 w-3" /> Available
-            </Button>
-          </div>
+      {/* Save Success Alert */}
+      {saveSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="h-4 w-4" /> Layout saved to server successfully for <strong>{activeVenue?.name} - {activeScreen?.name}</strong>!
         </div>
       )}
 
-      {/* Main Interactive Seat Canvas */}
-      <Card className="overflow-hidden border border-border/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 shadow-2xl relative">
-        {/* Speaker Indicators */}
-        <div className="absolute top-4 left-6 flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase">
-          <Volume2 className="h-3.5 w-3.5 text-primary/60" /> Left Surround
-        </div>
-        <div className="absolute top-4 right-6 flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase">
-          <Volume2 className="h-3.5 w-3.5 text-primary/60" /> Right Surround
+      {/* Dynamic City, Venue & Navigation Tabs Bar */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-md space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-rose-500" />
+              <span className="text-xs font-bold text-slate-300">City:</span>
+              <select
+                value={selectedCityId}
+                onChange={(e) => setSelectedCityId(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white focus:outline-none cursor-pointer"
+              >
+                {citiesList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.country})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-bold text-slate-300">Venue:</span>
+              <select
+                value={selectedVenueId}
+                onChange={(e) => {
+                  setSelectedVenueId(e.target.value);
+                  const targetV = venuesList.find((v) => v.id === e.target.value);
+                  if (targetV && targetV.screens && targetV.screens.length > 0) {
+                    setSelectedScreenId(targetV.screens[0].id);
+                  }
+                }}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white focus:outline-none cursor-pointer"
+              >
+                {venuesList.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-bold text-slate-300">Screen:</span>
+              <select
+                value={selectedScreenId}
+                onChange={(e) => setSelectedScreenId(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white focus:outline-none cursor-pointer"
+              >
+                {activeScreensList.map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Preset Layout Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-400">Auditorium Preset:</span>
+            <select
+              value={selectedLayoutId}
+              onChange={(e) => setSelectedLayoutId(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white focus:outline-none cursor-pointer"
+            >
+              {seatLayouts.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} ({l.totalSeats} seats)
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Projection Screen Representation */}
-        <div className="flex flex-col items-center pt-8 pb-6 px-4 relative">
-          <div
-            className={cn(
-              "w-full max-w-2xl h-4 bg-gradient-to-r from-primary/10 via-primary to-primary/10 shadow-[0_10px_30px_rgba(59,130,246,0.5)] border-t border-primary/50 relative overflow-hidden transition-all duration-300",
-              isCurvedScreen ? "rounded-[100%]" : "rounded-md"
-            )}
+        {/* Navigation Tabs Header */}
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+          <button
+            onClick={() => setActiveTab("canvas")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "canvas" ? "bg-rose-600 text-white shadow-md" : "bg-slate-950 text-slate-400 hover:text-white"
+            }`}
           >
-            <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent" />
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Tv className="h-3.5 w-3.5 text-primary animate-pulse" />
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.3em] text-primary/90">
-              {activeTheater.name} • {activeScreen.name}
-            </span>
-          </div>
+            <Grid className="h-3.5 w-3.5" /> Interactive Canvas & Seat Grid
+          </button>
+          <button
+            onClick={() => setActiveTab("pricing")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "pricing" ? "bg-rose-600 text-white shadow-md" : "bg-slate-950 text-slate-400 hover:text-white"
+            }`}
+          >
+            <DollarSign className="h-3.5 w-3.5" /> Tier Matrix & Surge Rules
+          </button>
+          <button
+            onClick={() => setActiveTab("geometry")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "geometry" ? "bg-rose-600 text-white shadow-md" : "bg-slate-950 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Tv className="h-3.5 w-3.5" /> Hall Architecture Specs
+          </button>
+          <button
+            onClick={() => setActiveTab("json")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "json" ? "bg-rose-600 text-white shadow-md" : "bg-slate-950 text-slate-400 hover:text-white"
+            }`}
+          >
+            <FileCode className="h-3.5 w-3.5" /> JSON Schema Payload
+          </button>
         </div>
+      </div>
 
-        {/* Seat Layout Grid */}
-        <div className="w-full overflow-auto py-6 px-4 flex justify-center">
-          <div
-            className="transition-transform duration-200 origin-top flex flex-col gap-3.5 py-2"
-            style={{ transform: `scale(${zoom})` }}
-          >
-            {/* Column Numbers */}
-            <div className="flex items-center gap-2 justify-center pl-8 pr-8">
-              {Array.from({ length: seatsPerRow }).map((_, colIdx) => {
-                const colNum = colIdx + 1;
-                const isAisle = colNum === centerAisleAfter;
+      {/* TAB 1: INTERACTIVE CANVAS & SEAT GRID */}
+      {activeTab === "canvas" && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Seat Type Filter & Dynamic Pricing Bar */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-sm space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-rose-500" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Filter / Display Seat Type:</span>
+              </div>
+
+              <div className="text-xs font-semibold text-slate-400">
+                Showing <strong className="text-white">{filteredCategoryCount} seats</strong> • Category Revenue: <strong className="text-emerald-400">{formatCurrency(filteredCategoryRevenue)}</strong>
+              </div>
+            </div>
+
+            {/* Seat Type Filter Badges */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setFilterCategory("ALL")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                  filterCategory === "ALL"
+                    ? "bg-rose-600 text-white border-rose-500 shadow-md"
+                    : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white"
+                }`}
+              >
+                All Seat Types ({currentLayout.totalSeats})
+              </button>
+
+              {(Object.keys(categoryConfig) as SeatCategory[]).map((catKey) => {
+                const cfg = categoryConfig[catKey];
+                const isSelected = filterCategory === catKey;
+                const count = currentLayout.seats.filter((s) => s.category === catKey && s.type !== "WALKWAY").length;
 
                 return (
-                  <React.Fragment key={colNum}>
-                    <button
-                      onClick={() => selectColumn(colNum)}
-                      className="w-9 text-center font-mono font-bold text-[11px] text-muted-foreground/70 hover:text-primary transition-colors cursor-pointer"
-                    >
-                      {colNum}
-                    </button>
-                    {isAisle && <div className="w-8 shrink-0 text-center text-[9px] font-bold text-muted-foreground/30 uppercase">Aisle</div>}
-                  </React.Fragment>
+                  <button
+                    key={catKey}
+                    onClick={() => setFilterCategory(catKey)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
+                      isSelected
+                        ? "bg-slate-800 text-white border-rose-500 ring-1 ring-rose-500 shadow-md"
+                        : `${cfg.bg} ${cfg.border} opacity-80 hover:opacity-100`
+                    }`}
+                  >
+                    <span>{cfg.icon} {cfg.name}</span>
+                    <span className="font-mono text-[11px] font-extrabold text-amber-300">(৳{categoryPrices[catKey]})</span>
+                    <span className="text-[10px] opacity-70">[{count}]</span>
+                  </button>
                 );
               })}
             </div>
+          </div>
 
-            {/* Seat Rows */}
-            {rows.map((rowLabel) => {
-              const rowSeats = seats.filter((s) => s.row === rowLabel);
+          {/* Main Editor Grid */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+            {/* Left 3 Cols: Interactive Cinema Stage & Seat Map */}
+            <div className="lg:col-span-3 rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-xl flex flex-col items-center select-none overflow-x-auto relative">
+              {/* Cinema Screen Curve */}
+              <div className="mb-8 w-full max-w-xl text-center">
+                <div className="relative mx-auto h-5 w-4/5 rounded-t-[100px] border-t-4 border-rose-500/80 bg-gradient-to-b from-rose-500/20 to-transparent shadow-[0_-8px_24px_rgba(244,63,94,0.3)] flex items-center justify-center">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    {activeVenue?.name || "Star Cineplex"} • {activeScreen?.name || "IMAX 3D Screen"} ⬇
+                  </span>
+                </div>
+              </div>
 
-              return (
-                <div key={rowLabel} className="flex items-center gap-2 justify-center">
-                  <button
-                    onClick={() => selectRow(rowLabel)}
-                    className="w-7 h-9 rounded bg-muted/30 border border-border/40 hover:bg-primary/20 hover:text-primary transition-colors font-bold text-xs text-foreground flex items-center justify-center cursor-pointer shadow-xs"
-                  >
-                    {rowLabel}
-                  </button>
+              {/* Interactive Seat Grid Matrix with Row & Column Headers */}
+              <div className="space-y-2 py-4">
+                {/* Column Header Painter Row */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-6 text-center text-[9px] font-bold text-slate-600 uppercase">Cols</span>
+                  <div className="flex items-center gap-1.5">
+                    {cols.map((colNum) => (
+                      <button
+                        key={colNum}
+                        onClick={() => paintEntireColumn(colNum)}
+                        className="h-6 w-7 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 transition-all cursor-pointer flex items-center justify-center"
+                        title={`Click to paint entire Column ${colNum} with ${activeTool}`}
+                      >
+                        {colNum}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="w-6 text-center text-[9px] font-bold text-slate-600 uppercase">Cols</span>
+                </div>
 
-                  <div className="flex items-center gap-2">
-                    {rowSeats.map((seat) => {
-                      const isEditorSelected = selectedSeatIds.includes(seat.id);
-                      const isCustomerBooked = customerBookedIds.includes(seat.id);
-                      const cfg = CATEGORY_CONFIG[seat.category];
-                      const isBlocked = seat.status === "BLOCKED";
+                {/* Rows with Row Painter Headers */}
+                {rows.map((row) => {
+                  const rowSeats = currentLayout.seats.filter((s) => s.row === row).sort((a, b) => a.col - b.col);
 
+                  return (
+                    <div key={row} className="flex items-center gap-2">
+                      {/* Row Painter Header */}
+                      <button
+                        onClick={() => paintEntireRow(row)}
+                        className="h-7 w-6 rounded bg-slate-900 border border-slate-800 font-mono text-xs font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 transition-all cursor-pointer flex items-center justify-center"
+                        title={`Click to paint entire Row ${row} with ${activeTool}`}
+                      >
+                        {row}
+                      </button>
+
+                      {/* Seat Columns */}
+                      <div className="flex items-center gap-1.5">
+                        {rowSeats.map((seat) => {
+                          if (seat.type === "WALKWAY") {
+                            return (
+                              <div
+                                key={seat.id}
+                                onClick={() => handleSeatClick(seat)}
+                                onMouseEnter={() => setHoveredSeat(seat)}
+                                className="h-7 w-7 rounded border border-dashed border-slate-800/40 bg-transparent flex items-center justify-center cursor-pointer hover:border-slate-700"
+                                title="Aisle Gap"
+                              />
+                            );
+                          }
+
+                          const isBlocked = seat.status === "BLOCKED";
+                          const isCustomerSelected = customerBookedIds.includes(seat.id);
+                          const cfg = categoryConfig[seat.category] || categoryConfig.SILVER;
+                          const matchesFilter = filterCategory === "ALL" || seat.category === filterCategory;
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              onClick={() => handleSeatClick(seat)}
+                              onMouseEnter={() => setHoveredSeat(seat)}
+                              onMouseLeave={() => setHoveredSeat(null)}
+                              className={`relative flex h-7 w-7 items-center justify-center rounded-t-lg border text-[10px] font-mono font-semibold transition-all transform hover:scale-110 active:scale-95 shadow-xs cursor-pointer ${
+                                !matchesFilter
+                                  ? "opacity-25 scale-90 border-slate-800 bg-slate-900 text-slate-600"
+                                  : isBlocked
+                                  ? "border-rose-900 bg-rose-950/80 text-rose-500 cursor-not-allowed opacity-60"
+                                  : mode === "PREVIEW" && isCustomerSelected
+                                  ? "border-emerald-400 bg-emerald-500 text-white font-extrabold ring-2 ring-emerald-400 scale-110 shadow-lg shadow-emerald-500/30"
+                                  : `${cfg.border} ${cfg.bg}`
+                              }`}
+                            >
+                              {isBlocked ? <Lock className="h-3 w-3" /> : seat.col}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Right Row Painter Header */}
+                      <button
+                        onClick={() => paintEntireRow(row)}
+                        className="h-7 w-6 rounded bg-slate-900 border border-slate-800 font-mono text-xs font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 transition-all cursor-pointer flex items-center justify-center"
+                        title={`Click to paint entire Row ${row} with ${activeTool}`}
+                      >
+                        {row}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Legend */}
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-slate-900 pt-5 text-xs text-slate-400">
+                {Object.entries(categoryConfig).map(([catKey, val]) => (
+                  <div key={catKey} className="flex items-center gap-1.5">
+                    <span className={`h-3.5 w-3.5 rounded-t border ${val.border} ${val.bg}`} />
+                    <span>{val.name} (৳{categoryPrices[catKey as SeatCategory]})</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3.5 w-3.5 rounded-t border border-rose-900 bg-rose-950/80" />
+                  <span>Blocked / VIP Locked</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right 1 Col: Tool Palette & Category Price Configurator */}
+            <div className="space-y-6">
+              {/* Active Brush / Tool Palette */}
+              {mode === "EDITOR" ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                      <Paintbrush className="h-4 w-4 text-rose-500" /> Active Paint Brush
+                    </h3>
+                    <p className="text-xs text-slate-400">Click single seats, row letters, or col headers to paint</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {(["RECLINER", "PLATINUM", "GOLD", "SILVER", "ACCESSIBLE", "BLOCKED", "WALKWAY"] as const).map((tool) => {
+                      const isSelected = activeTool === tool;
                       return (
-                        <React.Fragment key={seat.id}>
-                          <button
-                            onClick={() => toggleSelectSeat(seat.id)}
-                            className={cn(
-                              "h-9 w-9 rounded-lg border text-xs font-bold transition-all duration-150 flex flex-col items-center justify-center cursor-pointer relative group shadow-sm",
-                              isBlocked
-                                ? "bg-muted/80 text-muted-foreground/40 border-border/40 opacity-40 cursor-not-allowed"
-                                : mode === "PREVIEW" && isCustomerBooked
-                                ? "bg-emerald-500 text-white border-emerald-400 ring-2 ring-emerald-400 scale-110 shadow-lg shadow-emerald-500/30"
-                                : mode === "EDITOR" && isEditorSelected
-                                ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 font-black shadow-lg shadow-primary/30"
-                                : `${cfg.bg} ${cfg.text} ${cfg.border} hover:scale-110 ${cfg.glow}`
-                            )}
-                            title={`${seat.row}${seat.number} • ${cfg.name} • ${formatCurrency(seat.priceBDT)}`}
-                          >
-                            <span className="text-[10px] leading-none font-bold">{seat.number}</span>
-                            <span className="text-[9px] leading-none mt-0.5 opacity-80">{cfg.icon}</span>
-                          </button>
-
-                          {seat.isAisleRight && <div className="w-8 shrink-0" />}
-                        </React.Fragment>
+                        <button
+                          key={tool}
+                          type="button"
+                          onClick={() => setActiveTool(tool as any)}
+                          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                            isSelected
+                              ? "border-rose-500 bg-rose-950/60 text-white shadow-sm"
+                              : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-3 w-3 rounded-full"
+                              style={{
+                                backgroundColor:
+                                  tool === "BLOCKED"
+                                    ? "#f43f5e"
+                                    : tool === "WALKWAY"
+                                    ? "#475569"
+                                    : categoryConfig[tool]?.color || "#fff",
+                              }}
+                            />
+                            <span>
+                              {tool === "BLOCKED"
+                                ? "Lock / Block Seat"
+                                : tool === "WALKWAY"
+                                ? "Walkway Aisle Gap"
+                                : categoryConfig[tool]?.name}
+                            </span>
+                          </div>
+                          {isSelected && <Check className="h-3.5 w-3.5 text-rose-400" />}
+                        </button>
                       );
                     })}
                   </div>
-
-                  <button
-                    onClick={() => selectRow(rowLabel)}
-                    className="w-7 h-9 rounded bg-muted/30 border border-border/40 hover:bg-primary/20 hover:text-primary transition-colors font-bold text-xs text-foreground flex items-center justify-center cursor-pointer shadow-xs"
-                  >
-                    {rowLabel}
-                  </button>
                 </div>
-              );
-            })}
+              ) : (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-5 shadow-sm space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
+                      <Eye className="h-4 w-4" /> Booking Simulation
+                    </h3>
+                    <p className="text-xs text-slate-400">Select seats to simulate customer checkout</p>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Selected Seats:</span>
+                      <span className="font-mono font-bold text-white">{customerBookedIds.length} seats</span>
+                    </div>
+                    <div className="border-t border-emerald-500/30 pt-2 flex items-center justify-between">
+                      <span className="font-semibold text-slate-200">Total Ticket Price:</span>
+                      <span className="font-mono font-extrabold text-emerald-400">
+                        {formatCurrency(previewSelectedTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Housefull Revenue Metrics */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm space-y-3">
+                <h3 className="text-sm font-bold text-white">Auditorium Capacity & Yield</h3>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>Bookable Inventory:</span>
+                    <span className="font-mono font-bold text-white">{activeSeatsCount} seats</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>Blocked / VIP Locked:</span>
+                    <span className="font-mono font-bold text-rose-400">{blockedSeatsCount} seats</span>
+                  </div>
+                  <div className="border-t border-slate-800 pt-2 flex items-center justify-between">
+                    <span className="font-semibold text-slate-200">Max Yield Per Show:</span>
+                    <span className="font-mono font-extrabold text-emerald-400">
+                      {formatCurrency(totalRevenuePotential)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hovered Seat Inspector */}
+              {hoveredSeat && hoveredSeat.type !== "WALKWAY" && (
+                <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 text-xs space-y-1 animate-in fade-in">
+                  <div className="font-bold text-white">Inspecting Seat {hoveredSeat.label}</div>
+                  <div className="text-slate-400">Category: <strong className="text-violet-300">{hoveredSeat.category}</strong></div>
+                  <div className="text-slate-400">Price Tier: <strong className="text-emerald-400">৳{hoveredSeat.basePrice}</strong></div>
+                  <div className="text-slate-400">Status: <strong className={hoveredSeat.status === "AVAILABLE" ? "text-emerald-400" : "text-rose-400"}>{hoveredSeat.status}</strong></div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-        {/* Legend */}
-        <div className="flex flex-wrap items-center justify-center gap-6 py-4 px-6 border-t border-border/40 bg-slate-950/90 text-xs">
-          {(Object.keys(CATEGORY_CONFIG) as SeatCategory[]).map((catKey) => {
-            const cfg = CATEGORY_CONFIG[catKey];
-            return (
-              <div key={catKey} className="flex items-center gap-2">
-                <div className={cn("h-4 w-4 rounded border flex items-center justify-center text-[9px]", cfg.bg, cfg.border)}>
-                  {cfg.icon}
-                </div>
-                <span className="text-muted-foreground font-medium">
-                  {cfg.name} <span className="font-bold text-foreground">({formatCurrency(cfg.price)})</span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Customer Booking Preview Summary Bar */}
-      {mode === "PREVIEW" && (
-        <Card className="bg-emerald-950/20 border-emerald-500/30 p-4 animate-in fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block">Customer Booking Simulation</span>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Selected {customerBookedIds.length} Seats:{" "}
-                <span className="font-mono font-bold text-foreground">
-                  {customerBookedIds.map((id) => id).join(", ") || "None"}
-                </span>
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <span className="text-[10px] text-muted-foreground block uppercase font-bold">Total Ticket Price</span>
-                <span className="text-xl font-black text-emerald-400">{formatCurrency(previewTotalBDT)}</span>
-              </div>
-              <Button disabled={customerBookedIds.length === 0} className="h-9 text-xs font-bold gap-1.5 bg-emerald-500 hover:bg-emerald-600">
-                <ShoppingBag className="h-4 w-4" /> Proceed to Test Checkout
-              </Button>
-            </div>
-          </div>
-        </Card>
       )}
 
-      {/* House Capacity & Revenue Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-xs text-muted-foreground uppercase font-bold">Total Screen Capacity</CardTitle>
-          </CardHeader>
-          <CardContent className="py-0 pb-3">
-            <p className="text-3xl font-black text-foreground">{totalCapacity} Seats</p>
-            <p className="text-[11px] text-muted-foreground mt-1 font-medium">{rows.length} Rows × {seatsPerRow} Cols</p>
-          </CardContent>
-        </Card>
+      {/* TAB 2: TIER MATRIX & SURGE RULES */}
+      {activeTab === "pricing" && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Surge Multipliers Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase">
+                <span>Base House Potential</span>
+                <DollarSign className="h-4 w-4 text-emerald-400" />
+              </div>
+              <p className="text-2xl font-black text-white">{formatCurrency(totalRevenuePotential)}</p>
+              <p className="text-[11px] text-slate-400">Standard show gross capacity</p>
+            </div>
 
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-xs text-muted-foreground uppercase font-bold">Sellable Inventory</CardTitle>
-          </CardHeader>
-          <CardContent className="py-0 pb-3">
-            <p className="text-3xl font-black text-emerald-400">{totalSellable} Seats</p>
-            <p className="text-[11px] text-emerald-500/90 mt-1 font-semibold">
-              {Math.round((totalSellable / (totalCapacity || 1)) * 100)}% available
-            </p>
-          </CardContent>
-        </Card>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-950/10 p-5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-amber-400 font-bold uppercase">
+                <span>Weekend Surge (1.2×)</span>
+                <TrendingUp className="h-4 w-4 text-amber-400" />
+              </div>
+              <p className="text-2xl font-black text-amber-400">{formatCurrency(weekendRevenuePotential)}</p>
+              <p className="text-[11px] text-slate-400">Fri & Sat peak show potential</p>
+            </div>
 
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-xs text-muted-foreground uppercase font-bold">Blocked Seats</CardTitle>
-          </CardHeader>
-          <CardContent className="py-0 pb-3">
-            <p className="text-3xl font-black text-rose-400">{totalBlocked} Seats</p>
-            <p className="text-[11px] text-muted-foreground mt-1 font-medium">Maintenance / Wheelchair</p>
-          </CardContent>
-        </Card>
+            <div className="rounded-2xl border border-purple-500/30 bg-purple-950/10 p-5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-purple-400 font-bold uppercase">
+                <span>Eid / Holiday Surge (1.5×)</span>
+                <Percent className="h-4 w-4 text-purple-400" />
+              </div>
+              <p className="text-2xl font-black text-purple-400">{formatCurrency(holidayRevenuePotential)}</p>
+              <p className="text-[11px] text-slate-400">Festival holiday gross potential</p>
+            </div>
+          </div>
 
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-xs text-muted-foreground uppercase font-bold">Max House Potential</CardTitle>
-          </CardHeader>
-          <CardContent className="py-0 pb-3">
-            <p className="text-3xl font-black text-amber-400">{formatCurrency(totalHouseGross)}</p>
-            <p className="text-[11px] text-muted-foreground mt-1 font-medium">Gross revenue per show</p>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Seat Category Price Configurator */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-md space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-emerald-400" /> Category Price Tiers & Yield Configurator
+              </h3>
+              <p className="text-xs text-slate-400">Set base price per seat type. All seats assigned to a category will immediately inherit the price.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {(Object.keys(categoryConfig) as SeatCategory[]).map((catKey) => {
+                const cfg = categoryConfig[catKey];
+                const count = currentLayout.seats.filter((s) => s.category === catKey && s.type !== "WALKWAY").length;
+                const tierRev = count * categoryPrices[catKey];
+
+                return (
+                  <div key={catKey} className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                        <span>{cfg.icon}</span> {cfg.name}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">{count} seats</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-bold">Price (৳):</span>
+                      <input
+                        type="number"
+                        value={categoryPrices[catKey]}
+                        onChange={(e) => handleCategoryPriceChange(catKey, parseFloat(e.target.value) || 0)}
+                        className="w-full h-8 rounded border border-slate-700 bg-slate-900 px-2 text-xs font-mono font-bold text-emerald-400 text-right focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400">Tier Potential:</span>
+                      <span className="font-mono font-bold text-emerald-400">{formatCurrency(tierRev)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: HALL ARCHITECTURE SPECS */}
+      {activeTab === "geometry" && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4 animate-in fade-in">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Tv className="h-4 w-4 text-rose-500" /> Hall Architecture & Acoustic Geometry
+            </h3>
+            <p className="text-xs text-slate-400">Projection arc, Dolby Atmos 64-channel spatial sound positioning, and gangway clearances.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-2">
+              <span className="font-bold text-white uppercase block">Curved Screen Projection Arc</span>
+              <p className="text-slate-400">IMAX Dual 4K Laser Projection with 15° Curved Arc Radius for immersive field-of-view.</p>
+            </div>
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-2">
+              <span className="font-bold text-white uppercase block">Dolby Atmos Audio Subsystem</span>
+              <p className="text-slate-400">64-Channel Spatial Audio with Left, Right, Center, and Overhead Ceiling speaker arrays.</p>
+            </div>
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-2">
+              <span className="font-bold text-white uppercase block">Row Legroom Pitch</span>
+              <p className="text-slate-400">1,200mm legroom pitch for Recliner Tiers; 950mm pitch for Standard Tiers.</p>
+            </div>
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-2">
+              <span className="font-bold text-white uppercase block">Emergency Gangways</span>
+              <p className="text-slate-400">Center Gangway after Column 7 with illuminated LED tread indicators.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: JSON SCHEMA PAYLOAD */}
+      {activeTab === "json" && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileCode className="h-4 w-4 text-rose-500" /> JSON Layout Specification & API Payload
+              </h3>
+              <p className="text-xs text-slate-400">Exportable JSON geometry schema used by backend API endpoints.</p>
+            </div>
+            <button onClick={copyJSONPayload} className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md">
+              <Copy className="h-3.5 w-3.5" /> {jsonCopied ? "Copied!" : "Copy JSON"}
+            </button>
+          </div>
+
+          <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-96">
+            {exportSchemaJSON}
+          </pre>
+        </div>
+      )}
     </div>
   );
-}
+};

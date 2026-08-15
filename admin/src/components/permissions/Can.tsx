@@ -4,7 +4,7 @@ import React from "react";
 import { useAuthStore } from "@/stores/auth.store";
 import { Permission, Role, can, hasRole, hasAnyRole } from "@/lib/auth/permissions";
 
-interface CanProps {
+export interface CanProps {
   permission?: Permission;
   role?: Role;
   anyRole?: Role[];

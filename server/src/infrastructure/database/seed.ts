@@ -84,7 +84,7 @@ export async function seedDatabase() {
 
     // 3. Seed Users (Admin, Managers, Customers)
     logger.info("Seeding system users and test customer accounts...");
-    const defaultPasswordHash = await Bun.password.hash("Pass1234!", { algorithm: "bcrypt", cost: 10 });
+    const defaultPasswordHash = await Bun.password.hash("Admin123!", { algorithm: "bcrypt", cost: 10 });
 
     const userSeedData = [
       { email: "admin@bookmyshow.com", fullName: "System Admin", role: "SUPER_ADMIN", phone: "+8801700000000" },
@@ -122,6 +122,12 @@ export async function seedDatabase() {
             currency: "BDT",
           }).onConflictDoNothing();
         }
+      } else {
+        // Ensure password hash matches Admin123!
+        await db
+          .update(users)
+          .set({ passwordHash: defaultPasswordHash, isActive: true })
+          .where(eq(users.id, userRecord.id));
       }
     }
 

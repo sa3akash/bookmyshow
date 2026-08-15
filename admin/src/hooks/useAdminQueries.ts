@@ -60,7 +60,6 @@ export function useVenuesQuery(cityId?: string) {
     queryFn: async () => {
       let targetCityId = cityId;
 
-      // If no cityId provided, fetch first available city from server
       if (!targetCityId) {
         const citiesList = await apiClient<any[]>("/cities").catch(() => []);
         if (citiesList && citiesList.length > 0) {
@@ -99,6 +98,75 @@ export function useCreateVenueMutation() {
       return await apiClient.post<VenueRecord>("/venues", newVenue);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
+    },
+  });
+}
+
+// ==================== SCREENS ====================
+export interface ScreenRecord {
+  id: string;
+  venueId: string;
+  venueName: string;
+  screenName: string;
+  screenType: string;
+  capacity: number;
+  soundSystem: string;
+  projectionFormat: string;
+  status: "ACTIVE" | "MAINTENANCE";
+}
+
+export function useScreensQuery(venueId?: string) {
+  return useQuery<ScreenRecord[]>({
+    queryKey: ["admin", "screens", venueId || "all"],
+    queryFn: async () => {
+      const citiesList = await apiClient<any[]>("/cities").catch(() => []);
+      if (!citiesList || citiesList.length === 0) return [];
+
+      const allScreens: ScreenRecord[] = [];
+
+      for (const city of citiesList) {
+        const venues = await apiClient<any[]>(`/venues?cityId=${city.id}`).catch(() => []);
+        if (Array.isArray(venues)) {
+          for (const v of venues) {
+            if (venueId && v.id !== venueId) continue;
+            const screens = v.screens || [];
+            for (const s of screens) {
+              const formats = s.supportedFormats || ["2D"];
+              allScreens.push({
+                id: s.id,
+                venueId: v.id,
+                venueName: v.name,
+                screenName: s.name,
+                screenType: Array.isArray(formats) ? formats.join(" ") : String(formats),
+                capacity: s.totalSeats || 180,
+                soundSystem: s.soundSystem || "Dolby Atmos 64-Channel",
+                projectionFormat: s.projectionFormat || "Laser 4K Dual",
+                status: "ACTIVE",
+              });
+            }
+          }
+        }
+      }
+
+      return allScreens;
+    },
+  });
+}
+
+export function useCreateScreenMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (newScreen: {
+      venueId: string;
+      name: string;
+      supportedFormats?: string[];
+      rows: { rowLabel: string; seatsCount: number; category?: string; priceMultiplier?: string }[];
+    }) => {
+      return await apiClient.post<any>("/screens/layout", newScreen);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "screens"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
     },
   });
@@ -173,6 +241,54 @@ export function useCreateMovieMutation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "movies"] });
+    },
+  });
+}
+
+// ==================== BOOKINGS ====================
+export function useBookingsQuery() {
+  return useQuery({
+    queryKey: ["admin", "bookings"],
+    queryFn: async () => {
+      const data = await apiClient<any[]>("/bookings");
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+}
+
+// ==================== PAYMENTS ====================
+export function usePaymentsQuery() {
+  return useQuery({
+    queryKey: ["admin", "payments"],
+    queryFn: async () => {
+      const data = await apiClient<any[]>("/payments");
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+}
+
+// ==================== REFUNDS ====================
+export function useRefundsQuery() {
+  return useQuery({
+    queryKey: ["admin", "refunds"],
+    queryFn: async () => {
+      const data = await apiClient<any[]>("/refunds");
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+}
+
+// ==================== AUDIT LOGS ====================
+export function useAuditLogsQuery() {
+  return useQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: async () => {
+      const data = await apiClient<any[]>("/audit");
+      if (Array.isArray(data)) return data;
+      return [];
     },
   });
 }
