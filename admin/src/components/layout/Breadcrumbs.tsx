@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Home } from "lucide-react";
 
@@ -12,10 +13,10 @@ export function Breadcrumbs() {
 
   return (
     <nav className="flex items-center space-x-1.5 text-xs text-muted-foreground px-6 py-2.5 bg-card/40 border-b border-border/40">
-      <a href="/dashboard" className="hover:text-foreground transition-colors flex items-center gap-1 font-medium">
+      <Link href="/dashboard" className="hover:text-foreground transition-colors flex items-center gap-1 font-medium">
         <Home className="h-3.5 w-3.5" />
         <span>Dashboard</span>
-      </a>
+      </Link>
       {segments.map((segment, index) => {
         const href = `/${segments.slice(0, index + 1).join("/")}`;
         const isLast = index === segments.length - 1;
@@ -29,9 +30,9 @@ export function Breadcrumbs() {
             {isLast ? (
               <span className="font-semibold text-foreground">{title}</span>
             ) : (
-              <a href={href} className="hover:text-foreground transition-colors font-medium">
+              <Link href={href} className="hover:text-foreground transition-colors font-medium">
                 {title}
-              </a>
+              </Link>
             )}
           </React.Fragment>
         );

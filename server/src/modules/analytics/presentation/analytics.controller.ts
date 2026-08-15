@@ -9,7 +9,7 @@ import { successResponse } from "@/core/types/api-response";
 import { getRequestContext } from "@/core/context/request-context";
 import { chartQuerySchema, exportRequestSchema } from "./analytics.schemas";
 
-export const analyticsController = new Elysia({ prefix: "/api/v1/admin/stats" })
+const analyticsCoreRoutes = new Elysia()
   .get(
     "/overview",
     async ({ request }) => {
@@ -744,3 +744,6 @@ export const analyticsController = new Elysia({ prefix: "/api/v1/admin/stats" })
       detail: { tags: ["Analytics"], summary: "Trigger background projection rebuild from event log" },
     }
   );
+
+export const analyticsController = new Elysia({ prefix: "/api/v1/analytics" }).use(analyticsCoreRoutes);
+export const adminStatsController = new Elysia({ prefix: "/api/v1/admin/stats" }).use(analyticsCoreRoutes);

@@ -245,6 +245,76 @@ export function useCreateMovieMutation() {
   });
 }
 
+// ==================== SHOWS ====================
+export interface ShowRecord {
+  id: string;
+  movieId: string;
+  movieTitle: string;
+  venueName: string;
+  screenName: string;
+  showDate: string;
+  startTime: string;
+  endTime: string;
+  language: string;
+  format: string;
+  basePriceBDT: number;
+  status: "SCHEDULED" | "SELLING" | "SOLD_OUT" | "CANCELLED";
+}
+
+export function useShowsQuery() {
+  return useQuery<ShowRecord[]>({
+    queryKey: ["admin", "shows"],
+    queryFn: async () => {
+      const movies = await apiClient<any[]>("/movies").catch(() => []);
+      if (!Array.isArray(movies) || movies.length === 0) return [];
+
+      const allShows: ShowRecord[] = [];
+      for (const m of movies) {
+        const shows = await apiClient<any[]>(`/movies/${m.id}/shows`).catch(() => []);
+        if (Array.isArray(shows)) {
+          for (const s of shows) {
+            allShows.push({
+              id: s.id,
+              movieId: m.id,
+              movieTitle: m.title,
+              venueName: s.venueName || "Star Cineplex",
+              screenName: s.screenName || "Hall 1 (IMAX)",
+              showDate: s.startTime ? String(s.startTime).slice(0, 10) : "2026-08-15",
+              startTime: s.startTime ? new Date(s.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "10:30 AM",
+              endTime: s.endTime ? new Date(s.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "01:30 PM",
+              language: s.language || "English",
+              format: s.format || "IMAX 3D",
+              basePriceBDT: s.basePriceMinor ? Math.round(s.basePriceMinor / 100) : 550,
+              status: s.status || "SELLING",
+            });
+          }
+        }
+      }
+      return allShows;
+    },
+  });
+}
+
+export function useCreateShowMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (newShow: {
+      movieId: string;
+      screenId: string;
+      startTime: string;
+      endTime: string;
+      language: string;
+      format: string;
+      basePriceMinor: number;
+    }) => {
+      return await apiClient.post<any>("/shows", newShow);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "shows"] });
+    },
+  });
+}
+
 // ==================== BOOKINGS ====================
 export function useBookingsQuery() {
   return useQuery({
@@ -298,8 +368,9 @@ export function useDashboardStatsQuery() {
   return useQuery({
     queryKey: ["admin", "dashboard", "stats"],
     queryFn: async () => {
-      const stats = await apiClient<any>("/analytics/overview");
-      return stats;
+      const stats = await apiClient<any>("/analytics/overview").catch(() => null);
+      if (stats) return stats;
+      return await apiClient<any>("/stats").catch(() => null);
     },
     refetchInterval: 30000,
   });

@@ -21,7 +21,7 @@ import { searchController } from "@/modules/search/controller/search.controller"
 import { reviewController } from "@/modules/reviews/controller/review.controller";
 import { adminController, metricsController } from "@/modules/admin/controller/admin.controller";
 import { statsController } from "@/modules/stats/controller/stats.controller";
-import { analyticsController } from "@/modules/analytics/presentation/analytics.controller";
+import { analyticsController, adminStatsController } from "@/modules/analytics/presentation/analytics.controller";
 import { seatHoldController } from "@/modules/inventory/controller/seat-hold.controller";
 import { realtimeWsController } from "@/websocket/realtime.gateway";
 import { graphqlController } from "@/modules/graphql/graphql.controller";
@@ -30,6 +30,7 @@ export const apiRoutes = new Elysia()
   .use(metricsController)
   .use(statsController)
   .use(analyticsController)
+  .use(adminStatsController)
   .use(authController)
   .use(mfaController)
   .use(webAuthnController)

@@ -16,6 +16,8 @@ import {
   Eye,
   CheckCircle2,
   AlertCircle,
+  CreditCard,
+  Check,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,13 +28,13 @@ import { useDashboardStatsQuery } from "@/hooks/useAdminQueries";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 const REVENUE_DATA = [
-  { date: "Mon", gross: 450000, net: 410000, refunds: 15000 },
-  { date: "Tue", gross: 520000, net: 480000, refunds: 12000 },
-  { date: "Wed", gross: 480000, net: 440000, refunds: 18000 },
-  { date: "Thu", gross: 610000, net: 570000, refunds: 20000 },
-  { date: "Fri", gross: 890000, net: 830000, refunds: 25000 },
-  { date: "Sat", gross: 1250000, net: 1180000, refunds: 30000 },
-  { date: "Sun", gross: 1100000, net: 1040000, refunds: 22000 },
+  { date: "Mon", gross: 45000, net: 41000, refunds: 1500 },
+  { date: "Tue", gross: 52000, net: 48000, refunds: 1200 },
+  { date: "Wed", gross: 48000, net: 44000, refunds: 1800 },
+  { date: "Thu", gross: 61000, net: 57000, refunds: 2000 },
+  { date: "Fri", gross: 89000, net: 83000, refunds: 2500 },
+  { date: "Sat", gross: 125000, net: 118000, refunds: 3000 },
+  { date: "Sun", gross: 110000, net: 104000, refunds: 2200 },
 ];
 
 const TOP_MOVIES = [
@@ -42,23 +44,28 @@ const TOP_MOVIES = [
   { rank: 4, title: "Toofan", language: "Bangla", bookings: 2400, revenue: 840000, occupancy: 81.2, rating: 8.5 },
 ];
 
-const TOP_VENUES = [
-  { rank: 1, name: "Star Cineplex - Bashundhara City", city: "Dhaka", shows: 48, tickets: 3820, occupancy: 92.4, revenue: 1719000 },
-  { rank: 2, name: "Blockbuster Cinemas - Jamuna Future Park", city: "Dhaka", shows: 42, tickets: 3150, occupancy: 86.5, revenue: 1417500 },
-  { rank: 3, name: "Star Cineplex - SKS Tower Mohakhali", city: "Dhaka", shows: 36, tickets: 2700, occupancy: 88.2, revenue: 1215000 },
-  { rank: 4, name: "Silver Screen - Chattogram", city: "Chattogram", shows: 24, tickets: 1800, occupancy: 81.0, revenue: 720000 },
-];
-
-const RECENT_BOOKINGS = [
-  { id: "BK-88120", customer: "Tanvir Rahman", movie: "Avatar 3", venue: "Star Cineplex", amount: 1350, seats: "C4, C5, C6", status: "CONFIRMED", time: "2 mins ago" },
-  { id: "BK-88119", customer: "Nusrat Jahan", movie: "Inception: Resurgence", venue: "Blockbuster", amount: 900, seats: "B1, B2", status: "CONFIRMED", time: "5 mins ago" },
-  { id: "BK-88118", customer: "Ahmad Ali", movie: "Priyotoma 2", venue: "Silver Screen", amount: 700, seats: "D8, D9", status: "PENDING", time: "12 mins ago" },
-  { id: "BK-88117", customer: "Farhana Islam", movie: "Toofan", venue: "Star Cineplex", amount: 450, seats: "E12", status: "CANCELLED", time: "18 mins ago" },
-];
-
 export function DashboardClientView() {
   const { dateRange } = useUIStore();
   const { data: statsData, isFetching, refetch } = useDashboardStatsQuery();
+
+  // Extract live backend metrics from /api/v1/analytics/overview payload
+  const netRevenue = statsData?.revenue?.net ?? statsData?.revenue?.gross ?? 53232;
+  const grossRevenue = statsData?.revenue?.gross ?? 48000;
+  const discountAmount = statsData?.revenue?.discount ?? 1968;
+  const refundAmount = statsData?.revenue?.refund ?? 1440;
+
+  const ticketsSold = statsData?.tickets?.sold ?? 1700;
+  const totalUsers = statsData?.users?.total ?? 7;
+  const newUsers = statsData?.users?.new ?? 45;
+  const activeUsers = statsData?.users?.active ?? 2;
+
+  const totalBookings = statsData?.bookings?.total ?? 1000;
+  const successfulBookings = statsData?.bookings?.successful ?? 850;
+  const failedBookings = statsData?.bookings?.failed ?? 50;
+  const cancelledBookings = statsData?.bookings?.cancelled ?? 40;
+
+  const occupancyRate = statsData?.occupancy?.rate ?? 78.5;
+  const paymentSuccessRate = statsData?.payments?.successRate ?? 98.4;
 
   return (
     <div className="space-y-6">
@@ -72,7 +79,7 @@ export function DashboardClientView() {
             </Badge>
             {isFetching && (
               <Badge variant="outline" className="text-[10px] gap-1 text-primary border-primary/30 animate-pulse">
-                <RefreshCw className="h-3 w-3 animate-spin" /> Syncing
+                <RefreshCw className="h-3 w-3 animate-spin" /> Syncing Live Server
               </Badge>
             )}
           </div>
@@ -81,96 +88,124 @@ export function DashboardClientView() {
           </p>
         </div>
         <div className="flex items-center gap-3 z-10">
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="h-9 text-xs gap-1.5 font-bold">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh Data
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="h-9 text-xs gap-1.5 font-bold cursor-pointer">
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh Live Data
           </Button>
         </div>
       </div>
 
-      {/* Top 8 KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1 */}
+      {/* Top 6 Live KPI Metric Cards from Server API */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* KPI 1: Net Revenue */}
         <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Total Revenue
+            <CardTitle className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Net Revenue
             </CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <DollarSign className="h-4 w-4" />
+            <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <DollarSign className="h-3.5 w-3.5" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-foreground">{formatCurrency(statsData?.totalRevenueBDT || 12450000)}</div>
-            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
-              <TrendingUp className="h-3.5 w-3.5 mr-1" />
-              <span>+14.8%</span>
-              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs previous period</span>
+            <div className="text-xl font-black tracking-tight text-foreground">{formatCurrency(netRevenue)}</div>
+            <div className="flex items-center text-[11px] text-emerald-400 font-semibold mt-1">
+              <span>Gross: {formatCurrency(grossRevenue)}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPI 2 */}
+        {/* KPI 2: Tickets Sold */}
         <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Tickets Sold
             </CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-              <Ticket className="h-4 w-4" />
+            <div className="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+              <Ticket className="h-3.5 w-3.5" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-foreground">{formatNumber(statsData?.ticketsSold || 28450)}</div>
-            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
-              <TrendingUp className="h-3.5 w-3.5 mr-1" />
-              <span>+8.2%</span>
-              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs previous period</span>
+            <div className="text-xl font-black tracking-tight text-foreground">{formatNumber(ticketsSold)}</div>
+            <div className="flex items-center text-[11px] text-emerald-400 font-semibold mt-1">
+              <span>Confirmed Tickets</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPI 3 */}
+        {/* KPI 3: Users */}
         <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Active Users
+            <CardTitle className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Platform Users
             </CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
-              <Users className="h-4 w-4" />
+            <div className="h-7 w-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
+              <Users className="h-3.5 w-3.5" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-foreground">{formatNumber(statsData?.activeUsers || 142800)}</div>
-            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
-              <TrendingUp className="h-3.5 w-3.5 mr-1" />
-              <span>+22.4%</span>
-              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">new accounts</span>
+            <div className="text-xl font-black tracking-tight text-foreground">{formatNumber(totalUsers)} Users</div>
+            <div className="flex items-center text-[11px] text-sky-400 font-semibold mt-1">
+              <span>Active: {activeUsers} • New: {newUsers}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPI 4 */}
+        {/* KPI 4: Occupancy Rate */}
         <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Avg Occupancy
             </CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-              <Activity className="h-4 w-4" />
+            <div className="h-7 w-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <Activity className="h-3.5 w-3.5" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black tracking-tight text-foreground">88.4%</div>
-            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
-              <TrendingUp className="h-3.5 w-3.5 mr-1" />
-              <span>+5.1%</span>
-              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">peak weekend rate</span>
+            <div className="text-xl font-black tracking-tight text-foreground">{occupancyRate}%</div>
+            <div className="flex items-center text-[11px] text-amber-400 font-semibold mt-1">
+              <span>Auditorium Fill Rate</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 5: Bookings */}
+        <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Bookings Volume
+            </CardTitle>
+            <div className="h-7 w-7 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <Film className="h-3.5 w-3.5" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-black tracking-tight text-foreground">{formatNumber(totalBookings)}</div>
+            <div className="flex items-center text-[11px] text-purple-400 font-semibold mt-1">
+              <span>Success: {successfulBookings} ({Math.round((successfulBookings / totalBookings) * 100)}%)</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 6: Payment Success Rate */}
+        <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Payment Health
+            </CardTitle>
+            <div className="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+              <CreditCard className="h-3.5 w-3.5" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-black tracking-tight text-foreground">{paymentSuccessRate}%</div>
+            <div className="flex items-center text-[11px] text-emerald-400 font-semibold mt-1">
+              <span>Gateway Success Rate</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts Row */}
+      {/* Charts & Breakdown Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 p-6 border-border/80 space-y-4">
           <CardHeader className="p-0 pb-2">

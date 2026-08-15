@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { ConflictError, AuthenticationError, NotFoundError } from "@/core/errors/app-error";
 import { accountLockoutService } from "@/infrastructure/security/account-lockout.service";
 import { generateAccessToken, generateRefreshToken, hashToken, JwtPayload } from "../domain/jwt";
+import { ROLE_PERMISSIONS_MAP } from "../domain/rbac.permissions";
 import { logger } from "@/core/observability/logger";
 
 export interface RegisterDTO {
@@ -288,6 +289,21 @@ export class AuthService {
         .where(eq(rolePermissions.roleId, roleIds[0]!));
 
       permissionsList = Array.from(new Set(permRecords.map((p) => p.permName)));
+    }
+
+    // Default RBAC permissions fallback when database rolePermissions table has no explicit records
+    if (permissionsList.length === 0 && rolesList.length > 0) {
+      for (const roleName of rolesList) {
+        const mapped = ROLE_PERMISSIONS_MAP[roleName as keyof typeof ROLE_PERMISSIONS_MAP];
+        if (mapped) {
+          permissionsList.push(...mapped);
+        }
+      }
+      permissionsList = Array.from(new Set(permissionsList));
+    }
+
+    if (rolesList.includes("SUPER_ADMIN")) {
+      permissionsList.push("analytics:read", "movie:create", "movie:update", "venue:create", "venue:update", "screen:create", "seat:update");
     }
 
     return { rolesList, permissionsList };

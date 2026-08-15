@@ -13,74 +13,108 @@ interface AuthState {
   checkAuth: () => void;
 }
 
-const DEFAULT_MOCK_USER: UserSession = {
-  userId: "admin-usr-001",
-  name: "Shakil Ahmed",
-  email: "admin@bookmyshow.com",
-  role: "SUPER_ADMIN",
-  permissions: ROLE_DEFAULT_PERMISSIONS.SUPER_ADMIN,
-  avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-};
-
-export const useAuthStore = create<AuthState>((set, get) => ({
-  user: DEFAULT_MOCK_USER,
-  token: typeof window !== "undefined" ? localStorage.getItem("admin_access_token") : "mock-jwt-token",
-  isAuthenticated: true,
-
-  checkAuth: () => {
-    if (typeof window === "undefined") return;
-    const token = localStorage.getItem("admin_access_token");
+const getInitialUser = (): UserSession | null => {
+  if (typeof window !== "undefined") {
     const storedUser = localStorage.getItem("admin_user");
-
-    if (token && storedUser) {
+    if (storedUser) {
       try {
-        const parsedUser = JSON.parse(storedUser);
-        document.cookie = `admin_access_token=${token}; path=/; max-age=86400; SameSite=Lax`;
-        set({
-          user: parsedUser,
-          token,
-          isAuthenticated: true,
-        });
+        const parsed = JSON.parse(storedUser);
+        if (parsed && parsed.role) {
+          if (!parsed.permissions || parsed.permissions.length === 0) {
+            parsed.permissions = ROLE_DEFAULT_PERMISSIONS[parsed.role as Role] || [];
+          }
+          return parsed;
+        }
       } catch {
-        // invalid session format
+        // fallback
       }
     }
-  },
+  }
+  return null;
+};
 
-  login: (userData, token = "admin-access-token") => {
-    const role = userData.role || "SUPER_ADMIN";
-    const permissions = userData.permissions || ROLE_DEFAULT_PERMISSIONS[role] || [];
-    const userSession: UserSession = {
-      userId: userData.userId || `admin-${crypto.randomUUID().slice(0, 6)}`,
-      name: userData.name || userData.email?.split("@")[0] || "Admin User",
-      email: userData.email || "admin@bookmyshow.com",
-      role,
-      permissions,
-      avatarUrl: userData.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    };
+const getInitialToken = (): string | null => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("admin_access_token");
+  }
+  return null;
+};
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("admin_access_token", token);
-      localStorage.setItem("admin_user", JSON.stringify(userSession));
-      document.cookie = `admin_access_token=${token}; path=/; max-age=86400; SameSite=Lax`;
-    }
+export const useAuthStore = create<AuthState>((set, get) => {
+  const initialUser = getInitialUser();
+  const initialToken = getInitialToken();
 
-    set({
-      user: userSession,
-      token,
-      isAuthenticated: true,
-    });
-  },
+  return {
+    user: initialUser,
+    token: initialToken,
+    isAuthenticated: Boolean(initialUser && initialToken),
 
-  loginWithCredentials: async (email, password) => {
-    try {
-      const response = await apiClient.post<any>("/auth/login", { email, password });
-      if (response && (response.accessToken || response.token)) {
-        const accessToken = response.accessToken || response.token;
-        const serverUser = response.user || {};
+    checkAuth: () => {
+      if (typeof window === "undefined") return;
+      const token = localStorage.getItem("admin_access_token");
+      const storedUser = localStorage.getItem("admin_user");
+
+      if (token && storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          if (!parsedUser.permissions || parsedUser.permissions.length === 0) {
+            parsedUser.permissions = ROLE_DEFAULT_PERMISSIONS[parsedUser.role as Role] || [];
+          }
+          document.cookie = `admin_access_token=${token}; path=/; max-age=86400; SameSite=Lax`;
+          set({
+            user: parsedUser,
+            token,
+            isAuthenticated: true,
+          });
+        } catch {
+          // invalid session format
+        }
+      } else {
+        set({ user: null, token: null, isAuthenticated: false });
+      }
+    },
+
+    login: (userData, token = "admin-access-token") => {
+      const role = userData.role || "SUPER_ADMIN";
+      const permissions = userData.permissions?.length
+        ? userData.permissions
+        : ROLE_DEFAULT_PERMISSIONS[role] || [];
+
+      const userSession: UserSession = {
+        userId: userData.userId || `admin-${crypto.randomUUID().slice(0, 6)}`,
+        name: userData.name || userData.email?.split("@")[0] || "Admin User",
+        email: userData.email || "admin@bookmyshow.com",
+        role,
+        permissions,
+        avatarUrl: userData.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      };
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("admin_access_token", token);
+        localStorage.setItem("admin_user", JSON.stringify(userSession));
+        document.cookie = `admin_access_token=${token}; path=/; max-age=86400; SameSite=Lax`;
+      }
+
+      set({
+        user: userSession,
+        token,
+        isAuthenticated: true,
+      });
+    },
+
+    loginWithCredentials: async (email, password) => {
+      try {
+        const response = await apiClient.post<any>("/auth/login", { email, password });
+        const serverUser = response.user || response;
+        const accessToken = response.accessToken || response.token || "signed-jwt-token";
+
         const primaryRole: Role = Array.isArray(serverUser.roles) && serverUser.roles.length > 0
           ? serverUser.roles[0]
           : serverUser.role || "SUPER_ADMIN";
+
+        const rolePermissions = Array.isArray(serverUser.permissions) && serverUser.permissions.length > 0
+          ? serverUser.permissions
+          : ROLE_DEFAULT_PERMISSIONS[primaryRole] || ROLE_DEFAULT_PERMISSIONS.SUPER_ADMIN;
 
         get().login(
           {
@@ -88,41 +122,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             name: serverUser.fullName || serverUser.name || email.split("@")[0],
             email: serverUser.email || email,
             role: primaryRole,
+            permissions: rolePermissions,
           },
           accessToken
         );
+
         return true;
+      } catch (err: any) {
+        throw err;
       }
-      throw new Error("Invalid authentication response format from server");
-    } catch (error: any) {
-      console.error("[AuthStore] Server authentication failed:", error);
-      throw error;
-    }
-  },
+    },
 
-  logout: () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("admin_access_token");
-      localStorage.removeItem("admin_user");
-      document.cookie = "admin_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    }
-    set({ user: null, token: null, isAuthenticated: false });
-  },
-
-  updateRole: (role) => {
-    set((state) => {
-      if (!state.user) return state;
-      const updatedUser = {
-        ...state.user,
-        role,
-        permissions: ROLE_DEFAULT_PERMISSIONS[role] || [],
-      };
-
+    logout: () => {
       if (typeof window !== "undefined") {
-        localStorage.setItem("admin_user", JSON.stringify(updatedUser));
+        localStorage.removeItem("admin_access_token");
+        localStorage.removeItem("admin_user");
+        document.cookie = "admin_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       }
 
-      return { user: updatedUser };
-    });
-  },
-}));
+      set({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+      });
+    },
+
+    updateRole: (role: Role) => {
+      set((state) => {
+        if (!state.user) return state;
+        const updatedUser = {
+          ...state.user,
+          role,
+          permissions: ROLE_DEFAULT_PERMISSIONS[role] || [],
+        };
+        if (typeof window !== "undefined") {
+          localStorage.setItem("admin_user", JSON.stringify(updatedUser));
+        }
+        return { user: updatedUser };
+      });
+    },
+  };
+});

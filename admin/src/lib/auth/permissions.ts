@@ -126,8 +126,11 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
 
 export function can(user?: UserSession | null, permission?: Permission): boolean {
   if (!user || !permission) return false;
-  if (user.role === "SUPER_ADMIN") return true;
-  return user.permissions.includes(permission);
+  if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") return true;
+  if (Array.isArray(user.permissions) && user.permissions.includes(permission)) return true;
+  const defaultPerms = ROLE_DEFAULT_PERMISSIONS[user.role];
+  if (defaultPerms && defaultPerms.includes(permission)) return true;
+  return false;
 }
 
 export function hasRole(user?: UserSession | null, role?: Role): boolean {

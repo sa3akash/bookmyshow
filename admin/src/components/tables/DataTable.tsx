@@ -169,7 +169,7 @@ export function DataTable<TData, TValue>({
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-border/80 text-xs text-muted-foreground bg-muted/20">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border/80 text-xs text-muted-foreground bg-muted/20">
           <div>
             Showing <span className="font-semibold text-foreground">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to{" "}
             <span className="font-semibold text-foreground">

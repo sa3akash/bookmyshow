@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -133,7 +134,7 @@ export function Sidebar() {
         <div>
           <div className="flex items-center justify-between h-16 px-4 border-b border-border/80">
             {(!sidebarCollapsed || mobileSidebarOpen) && (
-              <a href="/dashboard" className="flex items-center gap-2.5">
+              <Link href="/dashboard" className="flex items-center gap-2.5">
                 <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-black shadow-md">
                   B
                 </div>
@@ -145,7 +146,7 @@ export function Sidebar() {
                     Admin Console
                   </span>
                 </div>
-              </a>
+              </Link>
             )}
             {sidebarCollapsed && !mobileSidebarOpen && (
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-black mx-auto shadow-md">
@@ -159,7 +160,7 @@ export function Sidebar() {
               className="hidden md:flex h-7 w-7 items-center justify-center rounded-lg border border-border/80 bg-muted/40 hover:bg-accent transition-colors cursor-pointer text-muted-foreground"
               title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             >
-              {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+              {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
 
             {/* Mobile Close Button */}
@@ -174,7 +175,10 @@ export function Sidebar() {
           {/* Navigation Sections */}
           <div className="overflow-y-auto max-h-[calc(100vh-8rem)] p-2 space-y-4">
             {navSections.map((section) => {
-              const visibleItems = section.items.filter((item) => !item.permission || can(user, item.permission));
+              const visibleItems = section.items.filter((item) => {
+                if (!item.permission) return true;
+                return can(user, item.permission);
+              });
               if (visibleItems.length === 0) return null;
 
               return (
@@ -189,7 +193,7 @@ export function Sidebar() {
                     const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
 
                     return (
-                      <a
+                      <Link
                         key={item.href}
                         href={item.href}
                         onClick={() => setMobileSidebarOpen(false)}
@@ -208,7 +212,7 @@ export function Sidebar() {
                             {item.badge}
                           </span>
                         )}
-                      </a>
+                      </Link>
                     );
                   })}
                 </div>
@@ -218,23 +222,23 @@ export function Sidebar() {
         </div>
 
         {/* Sidebar Footer User Role Info */}
-        <div className="p-3 border-t border-border/80 bg-muted/20">
-          {!sidebarCollapsed || mobileSidebarOpen ? (
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">
-                {user?.name?.[0] || "A"}
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs font-semibold text-foreground truncate">{user?.name}</span>
-                <span className="text-[10px] font-medium text-muted-foreground truncate">{user?.role}</span>
+        {(!sidebarCollapsed || mobileSidebarOpen) && (
+          <div className="p-3 border-t border-border/80 bg-muted/20 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <img
+                src={user?.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"}
+                alt={user?.name || "User Avatar"}
+                className="h-7 w-7 rounded-full object-cover border border-border shrink-0"
+              />
+              <div className="flex flex-col truncate">
+                <span className="text-xs font-bold text-foreground truncate">{user?.name || "Admin User"}</span>
+                <span className="text-[10px] font-semibold text-primary uppercase tracking-wider truncate">
+                  {user?.role ? user.role.replace("_", " ") : "SUPER ADMIN"}
+                </span>
               </div>
             </div>
-          ) : (
-            <div className="h-8 w-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs mx-auto">
-              {user?.name?.[0] || "A"}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </aside>
     </>
   );
