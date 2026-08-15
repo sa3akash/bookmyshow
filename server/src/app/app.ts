@@ -11,6 +11,7 @@ import { securityHeadersPlugin } from "@/infrastructure/security/security-header
 import { botProtectionPlugin } from "@/infrastructure/security/bot-protection.plugin";
 import { rateLimiterPlugin } from "@/infrastructure/security/rate-limiter.plugin";
 import { apiRoutes } from "@/routes";
+import { env } from "@/config/env";
 
 export const app = new Elysia()
   .use(cors())
@@ -25,7 +26,7 @@ export const app = new Elysia()
         info: {
           title: "BookMyShow Production Backend API",
           version: "1.0.0",
-          description: "High-scale, production-grade ticket booking backend engine with REST & GraphQL APIs.\n\n🚀 **Apollo GraphQL Studio Sandbox**: [Launch Apollo Studio Sandbox Explorer](https://studio.apollographql.com/sandbox/explorer?endpoint=http://localhost:3000/graphql)\n\nFeatures: Movies, Live Events, Concerts, Sports, jsPDF Invoices, Bank Offers, Recommendations, Multi-Gateway Payments (bKash, Stripe, Razorpay, SSLCommerz, Nagad, Wallet), Refunds & Merchant Settlements",
+          description: `High-scale, production-grade ticket booking backend engine with REST & GraphQL APIs.\n\n🚀 **Apollo GraphQL Studio Sandbox**: [Launch Apollo Studio Sandbox Explorer](https://studio.apollographql.com/sandbox/explorer?endpoint=http://localhost:${env.PORT}/graphql)\n\nFeatures: Movies, Live Events, Concerts, Sports, jsPDF Invoices, Bank Offers, Recommendations, Multi-Gateway Payments (bKash, Stripe, Razorpay, SSLCommerz, Nagad, Wallet), Refunds & Merchant Settlements`,
         },
         components: {
           securitySchemes: {
@@ -57,7 +58,7 @@ export const app = new Elysia()
           { name: "Recommendations", description: "Popular, Trending & Genre-Matched Movie Recommendations" },
           { name: "Search", description: "Full-Text Catalog Search" },
           { name: "Reviews", description: "Movie Ratings & User Reviews" },
-          { name: "GraphQL", description: "GraphQL Single-Endpoint Queries & Mutations (/graphql) — [Launch Apollo Studio Explorer](https://studio.apollographql.com/sandbox/explorer?endpoint=http://localhost:3000/graphql)" },
+          { name: "GraphQL", description: `GraphQL Single-Endpoint Queries & Mutations (/graphql) — [Launch Apollo Studio Sandbox Explorer](https://studio.apollographql.com/sandbox/explorer?endpoint=http://localhost:${env.PORT}/graphql)` },
           { name: "Admin", description: "Admin Dashboard Analytics & Seat Hold Reconciliation" },
           { name: "System", description: "Health Probes & Prometheus Metrics" },
         ],
