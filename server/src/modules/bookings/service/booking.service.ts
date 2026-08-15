@@ -137,6 +137,8 @@ export class BookingService {
       userId: dto.userId,
     });
 
+    console.log("lockResult", lockResult);
+
     const bookingNumber = "BMS-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Date.now().toString().slice(-4);
     const finalAmountMinor = lockResult.totalAmountMinor;
 

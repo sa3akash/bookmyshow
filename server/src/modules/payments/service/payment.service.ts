@@ -15,7 +15,7 @@ export class PaymentService {
   async createPaymentIntent(
     bookingId: string,
     userId: string,
-    providerName: string = "MOCK",
+    providerName: string,
     idempotencyKey?: string
   ) {
     if (idempotencyKey) {
@@ -46,6 +46,7 @@ export class PaymentService {
     }
 
     const provider = PaymentProviderFactory.getProvider(providerName);
+    
     const intentResult = await provider.createPaymentIntent({
       bookingId: booking.id,
       amountMinor: booking.finalAmountMinor,
@@ -90,6 +91,7 @@ export class PaymentService {
         provider: provider.providerName,
         transactionId: intentResult.transactionId,
         clientSecret: intentResult.clientSecret,
+        paymentUrl: intentResult.paymentUrl,
         amountMinor: intentResult.amountMinor,
         currency: intentResult.currency,
         status: "PENDING",
@@ -126,6 +128,15 @@ export class PaymentService {
     const verification = await provider.verifyPayment(paymentRecord.transactionId || "");
 
     if (!verification.verified || verification.status !== "SUCCESS") {
+      await db
+        .update(payments)
+        .set({
+          status: "FAILED",
+          rawWebhookData: verification as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentRecord.id));
+
       throw new PaymentError("Independent server payment verification failed");
     }
 
@@ -136,7 +147,11 @@ export class PaymentService {
     return await db.transaction(async (tx) => {
       await tx
         .update(payments)
-        .set({ status: "SUCCESS", updatedAt: new Date() })
+        .set({
+          status: "SUCCESS",
+          rawWebhookData: verification as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        })
         .where(eq(payments.id, paymentRecord.id));
 
       await tx
@@ -178,6 +193,107 @@ export class PaymentService {
 
       return { status: "SUCCESS", bookingId: paymentRecord.bookingId, verified: true };
     });
+  }
+
+  /**
+   * BROWSER REDIRECT CALLBACK HANDLING
+   * Handles GET callbacks from bKash, SSLCommerz, Nagad, etc., when redirected back to backend.
+   */
+  async handleCallback(params: { paymentID?: string; status?: string; provider?: string }) {
+    const { paymentID } = params;
+    if (!paymentID) {
+      throw new PaymentError("Missing paymentID in gateway callback");
+    }
+
+    const paymentRecord = await db.query.payments.findFirst({
+      where: eq(payments.transactionId, paymentID),
+    });
+
+    if (!paymentRecord) {
+      throw new NotFoundError(`Payment transaction ${paymentID} not found`);
+    }
+
+    const bookingRecord = await db.query.bookings.findFirst({
+      where: eq(bookings.id, paymentRecord.bookingId),
+    });
+
+    const clientBaseUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    const showId = bookingRecord?.showId || "";
+
+    // INDEPENDENT SERVER-TO-SERVER VERIFICATION (Never rely on browser callback query params)
+    const provider = PaymentProviderFactory.getProvider(paymentRecord.provider);
+    const verification = await provider.verifyPayment(paymentRecord.transactionId || "");
+    const rawGatewayData = (verification.metadata as Record<string, unknown>) || { callbackParams: params, verification };
+
+    if (verification.verified && verification.status === "SUCCESS") {
+      if (paymentRecord.status !== "SUCCESS") {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(payments)
+            .set({
+              status: "SUCCESS",
+              rawWebhookData: rawGatewayData,
+              updatedAt: new Date(),
+            })
+            .where(eq(payments.id, paymentRecord.id));
+
+          await tx
+            .update(bookings)
+            .set({ status: "CONFIRMED", updatedAt: new Date() })
+            .where(eq(bookings.id, paymentRecord.bookingId));
+
+          await financialLedgerService.recordEntry({
+            entryType: "REVENUE",
+            direction: "CREDIT",
+            amountMinor: paymentRecord.amountMinor,
+            referenceType: "payment",
+            referenceId: paymentRecord.id,
+            metadata: { bookingId: paymentRecord.bookingId, provider: paymentRecord.provider },
+          });
+        });
+      }
+
+      const redirectUrl = `${clientBaseUrl}/booking/${showId}/confirmation/${paymentRecord.bookingId}?paymentStatus=SUCCESS`;
+      return {
+        status: "SUCCESS",
+        paymentId: paymentRecord.id,
+        bookingId: paymentRecord.bookingId,
+        showId,
+        redirectUrl,
+        verified: true,
+        rawGatewayResponse: rawGatewayData,
+      };
+    }
+
+    // Payment failed or rejected by gateway server
+    await db.transaction(async (tx) => {
+      await tx
+        .update(payments)
+        .set({
+          status: "FAILED",
+          rawWebhookData: rawGatewayData,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentRecord.id));
+
+      await tx
+        .update(bookings)
+        .set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(eq(bookings.id, paymentRecord.bookingId));
+    });
+
+    const redirectUrl = `${clientBaseUrl}/booking/${showId}/payment?error=payment_failed&bookingId=${paymentRecord.bookingId}`;
+
+    return {
+      status: "FAILED",
+      message: `Payment verification failed on ${paymentRecord.provider} gateway server`,
+      paymentId: paymentRecord.id,
+      bookingId: paymentRecord.bookingId,
+      showId,
+      redirectUrl,
+      verified: false,
+      rawGatewayResponse: rawGatewayData,
+    };
   }
 
   /**

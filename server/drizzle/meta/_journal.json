@@ -29,6 +29,13 @@
       "when": 1786741105006,
       "tag": "0003_old_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786797095069,
+      "tag": "0004_slim_pretty_boy",
+      "breakpoints": true
     }
   ]
 }

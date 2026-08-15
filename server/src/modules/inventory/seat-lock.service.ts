@@ -60,21 +60,6 @@ export class SeatLockService {
           where: eq(shows.id, showId),
         });
 
-        if (!show && (process.env.NODE_ENV === "test" || env.NODE_ENV === "test")) {
-          show = {
-            id: showId,
-            movieId: "00000000-0000-0000-0000-000000000001",
-            screenId: "00000000-0000-0000-0000-000000000002",
-            startTime: new Date(),
-            endTime: new Date(),
-            language: "English",
-            format: "IMAX 3D",
-            basePriceMinor: 50000,
-            status: "SCHEDULED",
-            createdAt: new Date(),
-          };
-        }
-
         if (!show) {
           throw new NotFoundError(`Show ${showId} not found`);
         }
@@ -85,26 +70,6 @@ export class SeatLockService {
 
         if (Array.isArray(targetSeats) && targetSeats.length > seatIds.length) {
           targetSeats = targetSeats.filter((s) => seatIds.includes(s.id));
-        }
-
-        if (targetSeats.length === 0 && (process.env.NODE_ENV === "test" || env.NODE_ENV === "test")) {
-          targetSeats = seatIds.map((sId, idx) => ({
-            id: sId,
-            screenId: show.screenId,
-            seatNumber: `A${idx + 1}`,
-            rowLabel: "A",
-            columnNumber: idx + 1,
-            type: "REGULAR",
-            category: "ROYAL",
-            priceMultiplier: "1.00",
-            x: idx,
-            y: 0,
-            width: 30,
-            height: 30,
-            rotation: 0,
-            isActive: true,
-            metadata: null,
-          }));
         }
 
         if (targetSeats.length !== seatIds.length) {

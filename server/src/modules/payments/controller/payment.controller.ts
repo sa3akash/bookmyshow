@@ -10,12 +10,14 @@ export const paymentController = new Elysia({ prefix: "/api/v1" })
       const { requireAuth, requestId } = getRequestContext(request);
       const user = requireAuth();
       const idempotencyKey = request.headers.get("idempotency-key") || request.headers.get("Idempotency-Key") || undefined;
+
       const intent = await paymentService.createPaymentIntent(
         params.bookingId,
         user.userId,
-        body.provider || "MOCK",
+        body.provider!,
         idempotencyKey
       );
+
       return successResponse(intent, undefined, requestId);
     },
     {
@@ -42,6 +44,96 @@ export const paymentController = new Elysia({ prefix: "/api/v1" })
       detail: {
         tags: ["Payments"],
         summary: "Independently verify payment intent with gateway server API",
+      },
+    }
+  )
+  .get(
+    "/payments/bkash/callback",
+    async ({ query, request, redirect }) => {
+      const { requestId } = getRequestContext(request);
+      const paymentID = (query.paymentID || query.paymentId || query.trxID) as string | undefined;
+      const status = (query.status || "success") as string;
+      const result = await paymentService.handleCallback({ paymentID, status, provider: "BKASH" });
+
+      const acceptHeader = request.headers.get("accept") || "";
+      if (acceptHeader.includes("text/html") && result.redirectUrl) {
+        return redirect(result.redirectUrl);
+      }
+
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      query: t.Object({
+        paymentID: t.Optional(t.String()),
+        paymentId: t.Optional(t.String()),
+        trxID: t.Optional(t.String()),
+        status: t.Optional(t.String()),
+        signature: t.Optional(t.String()),
+        apiVersion: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["Payments"],
+        summary: "Process bKash browser redirect GET callback",
+      },
+    }
+  )
+  .get(
+    "/payments/callback",
+    async ({ query, request, redirect }) => {
+      const { requestId } = getRequestContext(request);
+      const paymentID = (query.paymentID || query.paymentId || query.transactionId) as string | undefined;
+      const status = (query.status || "success") as string;
+      const provider = (query.provider || "BKASH") as string;
+      const result = await paymentService.handleCallback({ paymentID, status, provider });
+
+      const acceptHeader = request.headers.get("accept") || "";
+      if (acceptHeader.includes("text/html") && result.redirectUrl) {
+        return redirect(result.redirectUrl);
+      }
+
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      query: t.Object({
+        paymentID: t.Optional(t.String()),
+        paymentId: t.Optional(t.String()),
+        transactionId: t.Optional(t.String()),
+        status: t.Optional(t.String()),
+        provider: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["Payments"],
+        summary: "Process general gateway browser redirect GET callback",
+      },
+    }
+  )
+  .get(
+    "/payments/webhook",
+    async ({ query, request, redirect }) => {
+      const { requestId } = getRequestContext(request);
+      const paymentID = (query.paymentID || query.paymentId || query.transactionId) as string | undefined;
+      const status = (query.status || "success") as string;
+      const result = await paymentService.handleCallback({ paymentID, status });
+
+      const acceptHeader = request.headers.get("accept") || "";
+      if (acceptHeader.includes("text/html") && result.redirectUrl) {
+        return redirect(result.redirectUrl);
+      }
+
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      query: t.Object({
+        paymentID: t.Optional(t.String()),
+        paymentId: t.Optional(t.String()),
+        transactionId: t.Optional(t.String()),
+        status: t.Optional(t.String()),
+        signature: t.Optional(t.String()),
+        apiVersion: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["Payments"],
+        summary: "Process GET payment webhook / redirect callback",
       },
     }
   )

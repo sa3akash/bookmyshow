@@ -52,18 +52,11 @@ export class AnalyticsRepository {
 
   public async getEventsCount(eventName?: string, startDate?: Date, endDate?: Date): Promise<number> {
     try {
-      const all = await db.select().from(analyticsEvents).limit(1000);
-      let filtered = all.map((e) => ({
-        eventName: e.eventName,
-        occurredAt: e.occurredAt ?? new Date(),
-      }));
-
-      if (filtered.length === 0) {
-        filtered = this.inMemoryEvents.map((e) => ({
-          eventName: e.eventName,
-          occurredAt: e.occurredAt ?? new Date(),
-        }));
-      }
+      const dbEvents = await db.select().from(analyticsEvents).limit(1000);
+      let filtered = [
+        ...dbEvents.map((e) => ({ eventName: e.eventName, occurredAt: e.occurredAt ?? new Date() })),
+        ...this.inMemoryEvents.map((e) => ({ eventName: e.eventName, occurredAt: e.occurredAt ?? new Date() })),
+      ];
 
       if (eventName) {
         filtered = filtered.filter((e) => e.eventName === eventName);

@@ -10,6 +10,7 @@ export interface PaymentIntent {
   transactionId: string;
   provider: string;
   clientSecret?: string;
+  paymentUrl?: string;
   amountMinor: number;
   currency: string;
   status: "PENDING" | "SUCCESS" | "FAILED";

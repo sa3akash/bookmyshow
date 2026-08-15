@@ -10,6 +10,7 @@ export const bookingController = new Elysia({ prefix: "/api/v1/bookings" })
       const { requireAuth, requestId } = getRequestContext(request);
       const user = requireAuth();
       const idempotencyKey = request.headers.get("idempotency-key") || request.headers.get("Idempotency-Key") || undefined;
+      
       const result = await bookingService.holdSeats({
         userId: user.userId,
         showId: body.showId,

@@ -100,21 +100,100 @@ export const venueController = new Elysia({ prefix: "/api/v1" })
       body: t.Object({
         screenId: t.Optional(t.String()),
         venueId: t.String(),
-        name: t.String(),
+        name: t.Optional(t.String()),
         supportedFormats: t.Optional(t.Array(t.String())),
-        rows: t.Array(
-          t.Object({
-            rowLabel: t.String(),
-            seatsCount: t.Number(),
-            type: t.Optional(t.String()),
-            category: t.Optional(t.String()),
-            priceMultiplier: t.Optional(t.String()),
-          }),
+        totalSeats: t.Optional(t.Number()),
+        rows: t.Optional(
+          t.Array(
+            t.Object({
+              rowLabel: t.String(),
+              seatsCount: t.Number(),
+              type: t.Optional(t.String()),
+              category: t.Optional(t.String()),
+              priceMultiplier: t.Optional(t.String()),
+            }),
+          ),
+        ),
+        seats: t.Optional(
+          t.Array(
+            t.Object({
+              id: t.Optional(t.String()),
+              rowLabel: t.String(),
+              columnNumber: t.Number(),
+              seatNumber: t.Optional(t.String()),
+              type: t.Optional(t.String()),
+              category: t.Optional(t.String()),
+              priceMultiplier: t.Optional(t.Union([t.String(), t.Number()])),
+              x: t.Optional(t.Number()),
+              y: t.Optional(t.Number()),
+              width: t.Optional(t.Number()),
+              height: t.Optional(t.Number()),
+              rotation: t.Optional(t.Number()),
+              isActive: t.Optional(t.Boolean()),
+            }),
+          ),
         ),
       }),
       detail: {
         tags: ["Venues"],
         summary: "Create or update a screen and synchronize seat layout via upsert",
+      },
+    },
+  )
+  .post(
+    "/screens/:screenId/seat-layout",
+    async ({ params, body, request }) => {
+      const { requirePermission, requestId } = getRequestContext(request);
+      requirePermission("venue:update");
+      const result = await venueService.createScreenWithLayout({
+        ...body,
+        screenId: params.screenId,
+      });
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      params: t.Object({
+        screenId: t.String(),
+      }),
+      body: t.Object({
+        venueId: t.Optional(t.String()),
+        name: t.Optional(t.String()),
+        supportedFormats: t.Optional(t.Array(t.String())),
+        totalSeats: t.Optional(t.Number()),
+        rows: t.Optional(
+          t.Array(
+            t.Object({
+              rowLabel: t.String(),
+              seatsCount: t.Number(),
+              type: t.Optional(t.String()),
+              category: t.Optional(t.String()),
+              priceMultiplier: t.Optional(t.String()),
+            }),
+          ),
+        ),
+        seats: t.Optional(
+          t.Array(
+            t.Object({
+              id: t.Optional(t.String()),
+              rowLabel: t.String(),
+              columnNumber: t.Number(),
+              seatNumber: t.Optional(t.String()),
+              type: t.Optional(t.String()),
+              category: t.Optional(t.String()),
+              priceMultiplier: t.Optional(t.Union([t.String(), t.Number()])),
+              x: t.Optional(t.Number()),
+              y: t.Optional(t.Number()),
+              width: t.Optional(t.Number()),
+              height: t.Optional(t.Number()),
+              rotation: t.Optional(t.Number()),
+              isActive: t.Optional(t.Boolean()),
+            }),
+          ),
+        ),
+      }),
+      detail: {
+        tags: ["Venues"],
+        summary: "Synchronize seat layout for a specific screen ID",
       },
     },
   )
@@ -181,4 +260,57 @@ export const venueController = new Elysia({ prefix: "/api/v1" })
       params: t.Object({ id: t.String() }),
       detail: { tags: ["Venues"], summary: "Delete (soft delete) a screen" },
     }
-  );
+  )
+  .get(
+    "/screens/:screenId/seat-layout",
+    async ({ params, request }) => {
+      const { requestId } = getRequestContext(request);
+      const seatLayout = await venueService.getSeatLayout(params.screenId);
+      return successResponse(seatLayout, undefined, requestId);
+    },
+    {
+      params: t.Object({ screenId: t.String() }),
+      detail: { tags: ["Venues"], summary: "Get seat layout for a screen" },
+    }
+  )
+  .post(
+    "/screens/:screenId/seat-layout",
+    async ({ params, body, request }) => {
+      const { requirePermission, requestId } = getRequestContext(request);
+      requirePermission("venue:update");
+      const result = await venueService.createScreenWithLayout({
+        ...body,
+        screenId: params.screenId,
+      });
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      params: t.Object({ screenId: t.String() }),
+      body: t.Object({
+        venueId: t.String(),
+        name: t.Optional(t.String()),
+        supportedFormats: t.Optional(t.Array(t.String())),
+        totalSeats: t.Optional(t.Number()),
+        seats: t.Array(
+          t.Object({
+            id: t.Optional(t.String()),
+            rowLabel: t.String(),
+            columnNumber: t.Number(),
+            seatNumber: t.Optional(t.String()),
+            type: t.Optional(t.String()),
+            category: t.Optional(t.String()),
+            priceMultiplier: t.Optional(t.Union([t.String(), t.Number()])),
+            x: t.Optional(t.Number()),
+            y: t.Optional(t.Number()),
+            width: t.Optional(t.Number()),
+            height: t.Optional(t.Number()),
+            rotation: t.Optional(t.Number()),
+            isActive: t.Optional(t.Boolean()),
+          }),
+        ),
+      }),
+      detail: { tags: ["Venues"], summary: "Save seat layout for a screen" },
+    }
+  )
+
+  ;

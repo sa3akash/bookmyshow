@@ -22,10 +22,11 @@ export interface CreateVenueDTO {
 
 export interface CreateScreenLayoutDTO {
   screenId?: string;
-  venueId: string;
-  name: string;
+  venueId?: string;
+  name?: string;
   supportedFormats?: string[];
-  rows: Array<{
+  totalSeats?: number;
+  rows?: Array<{
     rowLabel: string;
     seatsCount: number;
     type?: string; // REGULAR, PREMIUM, VIP, RECLINER, COUPLE, ACCESSIBLE, WHEELCHAIR, SOFA, BALCONY, BOX
@@ -34,6 +35,22 @@ export interface CreateScreenLayoutDTO {
     width?: number;
     height?: number;
     rotation?: number;
+    metadata?: Record<string, unknown>;
+  }>;
+  seats?: Array<{
+    id?: string;
+    rowLabel: string;
+    columnNumber: number;
+    seatNumber?: string;
+    type?: string;
+    category?: string;
+    priceMultiplier?: string | number;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    rotation?: number;
+    isActive?: boolean;
     metadata?: Record<string, unknown>;
   }>;
 }
@@ -84,13 +101,31 @@ export class VenueService {
   }
 
   async createScreenWithLayout(dto: CreateScreenLayoutDTO) {
-    let targetVenueId = dto.venueId;
+    let targetVenueId = dto.venueId || "";
 
-    const existingVenue = await db.query.venues.findFirst({
-      where: eq(venues.id, targetVenueId),
-    });
+    if (dto.screenId && !targetVenueId) {
+      const existingScreen = await db.query.venueScreens.findFirst({
+        where: eq(venueScreens.id, dto.screenId),
+      });
+      if (existingScreen) {
+        targetVenueId = existingScreen.venueId;
+      }
+    }
 
-    if (!existingVenue) {
+    if (targetVenueId) {
+      const existingVenue = await db.query.venues.findFirst({
+        where: eq(venues.id, targetVenueId),
+      });
+
+      if (!existingVenue) {
+        const firstVenue = await db.query.venues.findFirst({
+          where: eq(venues.isActive, true),
+        });
+        if (firstVenue) {
+          targetVenueId = firstVenue.id;
+        }
+      }
+    } else {
       const firstVenue = await db.query.venues.findFirst({
         where: eq(venues.isActive, true),
       });
@@ -99,76 +134,49 @@ export class VenueService {
       }
     }
 
-    let totalSeats = 0;
-    for (const r of dto.rows) {
-      totalSeats += r.seatsCount;
-    }
+    const seatsToInsert: Array<{
+      screenId: string;
+      rowLabel: string;
+      columnNumber: number;
+      seatNumber: string;
+      type: string;
+      category: string;
+      priceMultiplier: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation: number;
+      isActive: boolean;
+      metadata: Record<string, unknown>;
+    }> = [];
 
-    return await db.transaction(async (tx) => {
-      let screen: typeof venueScreens.$inferSelect | undefined;
-
-      if (dto.screenId) {
-        screen = await tx.query.venueScreens.findFirst({
-          where: eq(venueScreens.id, dto.screenId),
+    if (dto.seats && dto.seats.length > 0) {
+      for (const seat of dto.seats) {
+        seatsToInsert.push({
+          screenId: "", // filled inside transaction after screen resolved
+          rowLabel: seat.rowLabel,
+          columnNumber: seat.columnNumber,
+          seatNumber: seat.seatNumber || `${seat.rowLabel}${seat.columnNumber}`,
+          type: seat.type || "REGULAR",
+          category: seat.category || "Standard",
+          priceMultiplier: String(seat.priceMultiplier ?? "1.00"),
+          x: Math.round(Number(seat.x ?? 0)),
+          y: Math.round(Number(seat.y ?? 0)),
+          width: Math.round(Number(seat.width ?? 30)),
+          height: Math.round(Number(seat.height ?? 30)),
+          rotation: Math.round(Number(seat.rotation ?? 0)),
+          isActive: seat.isActive !== false,
+          metadata: seat.metadata || {},
         });
       }
-
-      if (!screen) {
-        screen = await tx.query.venueScreens.findFirst({
-          where: and(eq(venueScreens.venueId, targetVenueId), eq(venueScreens.name, dto.name)),
-        });
-      }
-
-      if (screen) {
-        const [updatedScreen] = await tx
-          .update(venueScreens)
-          .set({
-            name: dto.name,
-            totalSeats,
-            supportedFormats: dto.supportedFormats || screen.supportedFormats,
-          })
-          .where(eq(venueScreens.id, screen.id))
-          .returning();
-        screen = updatedScreen!;
-      } else {
-        const [insertedScreen] = await tx
-          .insert(venueScreens)
-          .values({
-            venueId: targetVenueId,
-            name: dto.name,
-            supportedFormats: dto.supportedFormats || ["2D", "3D", "IMAX", "4DX", "DOLBY", "VIP", "PREMIUM"],
-            totalSeats,
-          })
-          .returning();
-        screen = insertedScreen!;
-      }
-
-      if (!screen) {
-        throw new Error("Failed to create or update venue screen");
-      }
-
-      const seatsToInsert: Array<{
-        screenId: string;
-        rowLabel: string;
-        columnNumber: number;
-        seatNumber: string;
-        type: string;
-        category: string;
-        priceMultiplier: string;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        rotation: number;
-        metadata: Record<string, unknown>;
-      }> = [];
-
+    } else if (dto.rows && dto.rows.length > 0) {
       let yPos = 0;
       for (const row of dto.rows) {
         yPos += 40; // Layout coordinate spacing
         for (let col = 1; col <= row.seatsCount; col++) {
           seatsToInsert.push({
-            screenId: screen.id,
+            screenId: "",
             rowLabel: row.rowLabel,
             columnNumber: col,
             seatNumber: `${row.rowLabel}${col}`,
@@ -180,11 +188,78 @@ export class VenueService {
             width: row.width || 30,
             height: row.height || 30,
             rotation: row.rotation || 0,
+            isActive: true,
             metadata: row.metadata || {},
           });
         }
       }
+    }
 
+    const totalSeats = seatsToInsert.filter(
+      (s) => s.type !== "WALKWAY" && s.isActive,
+    ).length;
+
+    return await db.transaction(async (tx) => {
+      let screen: typeof venueScreens.$inferSelect | undefined;
+
+      if (dto.screenId) {
+        screen = await tx.query.venueScreens.findFirst({
+          where: eq(venueScreens.id, dto.screenId),
+        });
+      }
+
+      if (!screen && dto.name) {
+        screen = await tx.query.venueScreens.findFirst({
+          where: and(
+            eq(venueScreens.venueId, targetVenueId),
+            eq(venueScreens.name, dto.name),
+          ),
+        });
+      }
+
+      if (screen) {
+        const [updatedScreen] = await tx
+          .update(venueScreens)
+          .set({
+            name: dto.name || screen.name,
+            totalSeats,
+            supportedFormats: dto.supportedFormats || screen.supportedFormats,
+          })
+          .where(eq(venueScreens.id, screen.id))
+          .returning();
+        screen = updatedScreen!;
+      } else {
+        const [insertedScreen] = await tx
+          .insert(venueScreens)
+          .values({
+            venueId: targetVenueId,
+            name: dto.name || "Main Screen",
+            supportedFormats: dto.supportedFormats || [
+              "2D",
+              "3D",
+              "IMAX",
+              "4DX",
+              "DOLBY",
+              "VIP",
+              "PREMIUM",
+            ],
+            totalSeats,
+          })
+          .returning();
+        screen = insertedScreen!;
+      }
+
+      if (!screen) {
+        throw new Error("Failed to create or update venue screen");
+      }
+
+      const activeSeatNumbers = new Set<string>();
+      for (const item of seatsToInsert) {
+        item.screenId = screen.id;
+        activeSeatNumbers.add(item.seatNumber);
+      }
+
+      // Upsert seats in chunks
       const CHUNK_SIZE = 50;
       for (let i = 0; i < seatsToInsert.length; i += CHUNK_SIZE) {
         const chunk = seatsToInsert.slice(i, i + CHUNK_SIZE);
@@ -204,10 +279,26 @@ export class VenueService {
               width: sql`excluded.width`,
               height: sql`excluded.height`,
               rotation: sql`excluded.rotation`,
-              isActive: true,
+              isActive: sql`excluded.is_active`,
               metadata: sql`excluded.metadata`,
             },
           });
+      }
+
+      // Soft-delete/deactivate any existing seats for this screen that are no longer in the payload
+      if (dto.seats) {
+        const currentDbSeats = await tx.query.seats.findMany({
+          where: eq(seats.screenId, screen.id),
+        });
+
+        for (const s of currentDbSeats) {
+          if (!activeSeatNumbers.has(s.seatNumber) && s.isActive) {
+            await tx
+              .update(seats)
+              .set({ isActive: false })
+              .where(eq(seats.id, s.id));
+          }
+        }
       }
 
       return {
@@ -256,6 +347,15 @@ export class VenueService {
     if (!deleted) throw new NotFoundError("Screen not found");
     return { success: true, id };
   }
+
+  async getSeatLayout(screenId: string) {
+    const seat = await db.query.seats.findMany({
+      where: eq(seats.screenId, screenId),
+    });
+    return seat;
+  }
+
+
 }
 
 export const venueService = new VenueService();

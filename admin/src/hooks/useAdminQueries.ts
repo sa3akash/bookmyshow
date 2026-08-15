@@ -103,6 +103,37 @@ export function useCreateVenueMutation() {
   });
 }
 
+export function useUpdateVenueMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      name?: string;
+      address?: string;
+      amenities?: string[];
+      isActive?: boolean;
+    }) => {
+      const { id, ...data } = payload;
+      return await apiClient.patch<any>(`/venues/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
+    },
+  });
+}
+
+export function useDeleteVenueMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return await apiClient.delete<any>(`/venues/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
+    },
+  });
+}
+
 // ==================== SCREENS ====================
 export interface ScreenRecord {
   id: string;
@@ -164,6 +195,39 @@ export function useCreateScreenMutation() {
       rows: { rowLabel: string; seatsCount: number; category?: string; priceMultiplier?: string }[];
     }) => {
       return await apiClient.post<any>("/screens/layout", newScreen);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "screens"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
+    },
+  });
+}
+
+export function useUpdateScreenMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      name?: string;
+      supportedFormats?: string[];
+      totalSeats?: number;
+      isActive?: boolean;
+    }) => {
+      const { id, ...data } = payload;
+      return await apiClient.patch<any>(`/screens/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "screens"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
+    },
+  });
+}
+
+export function useDeleteScreenMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return await apiClient.delete<any>(`/screens/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "screens"] });
