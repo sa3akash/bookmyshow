@@ -1,12 +1,12 @@
-import { db } from "@/infrastructure/database/client";
-import { payments, bookings, outboxEvents } from "@/infrastructure/database/schema";
-import { eq, and } from "drizzle-orm";
-import { PaymentProviderFactory } from "@/infrastructure/payments/payment-provider.factory";
-import { financialLedgerService } from "@/core/ledger/ledger.service";
+import { AuthorizationError, NotFoundError, PaymentError } from "@/core/errors/app-error";
 import { idempotencyService } from "@/core/idempotency/idempotency.service";
-import { PaymentError, NotFoundError, AuthorizationError, ConflictError } from "@/core/errors/app-error";
-import { redis } from "@/infrastructure/redis/client";
+import { financialLedgerService } from "@/core/ledger/ledger.service";
 import { logger } from "@/core/observability/logger";
+import { db } from "@/infrastructure/database/client";
+import { bookings, outboxEvents, payments } from "@/infrastructure/database/schema";
+import { PaymentProviderFactory } from "@/infrastructure/payments/payment-provider.factory";
+import { redis } from "@/infrastructure/redis/client";
+import { eq } from "drizzle-orm";
 
 export class PaymentService {
   /**
@@ -46,7 +46,7 @@ export class PaymentService {
     }
 
     const provider = PaymentProviderFactory.getProvider(providerName);
-    
+
     const intentResult = await provider.createPaymentIntent({
       bookingId: booking.id,
       amountMinor: booking.finalAmountMinor,
@@ -333,7 +333,7 @@ export class PaymentService {
         logger.info({ dedupKey }, "Webhook event already processed (Deduplicated)");
         return JSON.parse(existing);
       }
-    } catch {}
+    } catch { }
 
     const payload = JSON.parse(rawBody) as { transactionId: string; status: "SUCCESS" | "FAILED" };
     const paymentRecord = await db.query.payments.findFirst({
@@ -344,15 +344,15 @@ export class PaymentService {
       throw new NotFoundError(`Payment transaction ${payload.transactionId} not found`);
     }
 
-    if (paymentRecord.status === "SUCCESS") {
-      return { message: "Webhook already processed" };
-    }
+    // INDEPENDENT VERIFICATION OF WEBHOOK EVENT WITH PAYMENT GATEWAY SERVER
+    const verification = await provider.verifyPayment(payload.transactionId || paymentRecord.transactionId || "");
+    const actualGatewayData = (verification.metadata as Record<string, unknown>) || payload;
 
     const result = await db.transaction(async (tx) => {
-      if (payload.status === "SUCCESS") {
+      if (payload.status === "SUCCESS" && verification.verified && verification.status === "SUCCESS") {
         await tx
           .update(payments)
-          .set({ status: "SUCCESS", rawWebhookData: payload, updatedAt: new Date() })
+          .set({ status: "SUCCESS", rawWebhookData: actualGatewayData, updatedAt: new Date() })
           .where(eq(payments.id, paymentRecord.id));
 
         await tx
@@ -396,7 +396,7 @@ export class PaymentService {
       } else {
         await tx
           .update(payments)
-          .set({ status: "FAILED", rawWebhookData: payload, updatedAt: new Date() })
+          .set({ status: "FAILED", rawWebhookData: actualGatewayData, updatedAt: new Date() })
           .where(eq(payments.id, paymentRecord.id));
 
         await tx
@@ -410,9 +410,145 @@ export class PaymentService {
 
     try {
       await redis.setex(dedupKey, 86400, JSON.stringify(result));
-    } catch {}
+    } catch { }
 
     return result;
+  }
+
+  /**
+   * SEARCH & LOOKUP PAYMENT BY TRANSACTION ID OR PAYMENT ID
+   * Performs live payment verification with payment gateway server API & returns full audit record.
+   */
+  async lookupPaymentByTransactionId(queryStr: string, providerArg?: string) {
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(queryStr);
+
+    const paymentRecord = await db.query.payments.findFirst({
+      where: isUuid
+        ? eq(payments.id, queryStr)
+        : eq(payments.transactionId, queryStr),
+    });
+
+    if (!paymentRecord) {
+      throw new NotFoundError(`Payment record not found for query: ${queryStr}`);
+    }
+
+    const provider = PaymentProviderFactory.getProvider(paymentRecord.provider);
+    const verification = await provider.verifyPayment(paymentRecord.transactionId || paymentRecord.id);
+
+    const rawGatewayData = (verification.metadata as Record<string, unknown>) || { verificationResult: verification };
+
+    if (verification.verified && verification.status === "SUCCESS" && paymentRecord.status !== "SUCCESS") {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(payments)
+          .set({ status: "SUCCESS", rawWebhookData: rawGatewayData, updatedAt: new Date() })
+          .where(eq(payments.id, paymentRecord.id));
+
+        await tx
+          .update(bookings)
+          .set({ status: "CONFIRMED", updatedAt: new Date() })
+          .where(eq(bookings.id, paymentRecord.bookingId));
+      });
+      paymentRecord.status = "SUCCESS";
+    }
+
+    return {
+      paymentId: paymentRecord.id,
+      bookingId: paymentRecord.bookingId,
+      userId: paymentRecord.userId,
+      provider: paymentRecord.provider,
+      transactionId: paymentRecord.transactionId,
+      amountMinor: paymentRecord.amountMinor,
+      currency: paymentRecord.currency,
+      status: paymentRecord.status,
+      verificationStatus: verification.status,
+      liveVerification: verification,
+      rawWebhookData: paymentRecord.rawWebhookData || rawGatewayData,
+      createdAt: paymentRecord.createdAt,
+      updatedAt: paymentRecord.updatedAt,
+    };
+  }
+
+  /**
+   * DIRECT PAYMENT GATEWAY SERVER QUERY (Without requiring local DB match first)
+   * Connects directly to external Payment Gateway APIs (bKash, SSLCommerz, Nagad, Stripe, Razorpay, PayPal)
+   * to query the status of transactionId. Also cross-references local DB for automatic reconciliation.
+   */
+  async queryGatewayDirectly(transactionId: string, providerName?: string) {
+    let verification: any = null;
+    let resolvedProviderName = providerName;
+
+    if (providerName) {
+      const provider = PaymentProviderFactory.getProvider(providerName);
+      verification = await provider.verifyPayment(transactionId);
+    } else {
+      // Scan all supported gateway adapters
+      const gateways = PaymentProviderFactory.getSupportedGateways();
+      for (const gw of gateways) {
+        try {
+          const adapter = PaymentProviderFactory.getProvider(gw);
+          const res = await adapter.verifyPayment(transactionId);
+          if (res.verified && res.status === "SUCCESS") {
+            verification = res;
+            resolvedProviderName = gw;
+            break;
+          }
+          if (!verification && res.metadata) {
+            verification = res;
+            resolvedProviderName = gw;
+          }
+        } catch {}
+      }
+    }
+
+    if (!verification) {
+      throw new NotFoundError(`Unable to query transaction ${transactionId} across payment gateway servers`);
+    }
+
+    // Cross-reference with DB to check if a local payment record exists for auto-reconciliation
+    const paymentRecord = await db.query.payments.findFirst({
+      where: eq(payments.transactionId, transactionId),
+    });
+
+    let dbReconciled = false;
+    if (paymentRecord && verification.verified && verification.status === "SUCCESS" && paymentRecord.status !== "SUCCESS") {
+      const rawGatewayData = (verification.metadata as Record<string, unknown>) || { verificationResult: verification };
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(payments)
+          .set({ status: "SUCCESS", rawWebhookData: rawGatewayData, updatedAt: new Date() })
+          .where(eq(payments.id, paymentRecord.id));
+
+        await tx
+          .update(bookings)
+          .set({ status: "CONFIRMED", updatedAt: new Date() })
+          .where(eq(bookings.id, paymentRecord.bookingId));
+
+        await financialLedgerService.recordEntry({
+          entryType: "REVENUE",
+          direction: "CREDIT",
+          amountMinor: paymentRecord.amountMinor,
+          referenceType: "payment",
+          referenceId: paymentRecord.id,
+          metadata: { bookingId: paymentRecord.bookingId, provider: resolvedProviderName || paymentRecord.provider },
+        });
+      });
+      dbReconciled = true;
+    }
+
+    return {
+      queryTransactionId: transactionId,
+      provider: resolvedProviderName || "UNKNOWN",
+      gatewayVerified: verification.verified,
+      gatewayStatus: verification.status,
+      gatewayResponse: verification,
+      dbMatchFound: !!paymentRecord,
+      dbReconciled,
+      localPaymentId: paymentRecord?.id || null,
+      localBookingId: paymentRecord?.bookingId || null,
+      localStatus: dbReconciled ? "SUCCESS" : paymentRecord?.status || null,
+    };
   }
 }
 

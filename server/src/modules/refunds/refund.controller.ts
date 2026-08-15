@@ -43,4 +43,17 @@ export const refundController = new Elysia({ prefix: "/api/v1/refunds" })
       params: t.Object({ refundId: t.String() }),
       detail: { tags: ["Payments"], summary: "Get refund request status by ID" },
     }
+  )
+  .get(
+    "/payment/:paymentId",
+    async ({ params, request }) => {
+      const { requireAuth, requestId } = getRequestContext(request);
+      const user = requireAuth();
+      const refund = await refundService.getRefundByPaymentId(params.paymentId, user.userId);
+      return successResponse(refund, undefined, requestId);
+    },
+    {
+      params: t.Object({ paymentId: t.String() }),
+      detail: { tags: ["Payments"], summary: "Get refund request status by payment ID or transaction ID" },
+    }
   );

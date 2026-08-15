@@ -34,6 +34,7 @@ export const rootResolvers = {
     ...walletResolvers.Query,
     ...offerResolvers.Query,
     ...ticketResolvers.Query,
+    ...paymentResolvers.Query,
     ...refundResolvers.Query,
     ...searchResolvers.Query,
     ...reviewResolvers.Query,

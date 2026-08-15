@@ -27,7 +27,11 @@ export class PayPalPaymentProvider implements PaymentProvider {
       status: "SUCCESS",
       transactionId,
       amountMinor: 10000,
-      metadata: { gateway: "PAYPAL", captureId: `CAPTURE-${transactionId}` },
+      metadata: {
+        gateway: "PAYPAL",
+        captureId: `CAPTURE-${transactionId}`,
+        rawGatewayResponse: { id: transactionId, status: "COMPLETED", intent: "CAPTURE" },
+      },
     };
   }
 

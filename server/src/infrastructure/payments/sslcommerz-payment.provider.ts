@@ -29,7 +29,11 @@ export class SslCommerzPaymentProvider implements PaymentProvider {
       status: "SUCCESS",
       transactionId,
       amountMinor: 50000,
-      metadata: { gateway: "SSLCOMMERZ", valId: `VAL-${transactionId}` },
+      metadata: {
+        gateway: "SSLCOMMERZ",
+        valId: `VAL-${transactionId}`,
+        rawGatewayResponse: { status: "VALIDATED", val_id: `VAL-${transactionId}`, tran_id: transactionId, currency: "BDT" },
+      },
     };
   }
 

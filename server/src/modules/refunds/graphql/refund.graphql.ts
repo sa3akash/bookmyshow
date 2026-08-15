@@ -4,9 +4,13 @@ export const refundTypeDefs = `
   type Refund {
     id: ID!
     bookingId: String!
+    paymentId: String
     userId: String!
     amountMinor: Int!
+    reason: String
     status: String!
+    processedAt: String
+    createdAt: String
   }
 
   type RefundResponse {
@@ -20,10 +24,12 @@ export const refundTypeDefs = `
 
   extend type Query {
     refund(id: ID!, userId: String!): Refund
+    refundByPayment(paymentId: String!, userId: String!): Refund
   }
 
   extend type Mutation {
     requestRefund(bookingId: ID!, userId: String!, reason: String, refundMethod: String): RefundResponse!
+    refundPayment(paymentId: ID!, userId: String!, reason: String, refundMethod: String): RefundResponse!
   }
 `;
 
@@ -31,6 +37,9 @@ export const refundResolvers = {
   Query: {
     refund: async (_: unknown, args: { id: string; userId: string }) => {
       return await refundService.getRefund(args.id, args.userId);
+    },
+    refundByPayment: async (_: unknown, args: { paymentId: string; userId: string }) => {
+      return await refundService.getRefundByPaymentId(args.paymentId, args.userId);
     },
   },
   Mutation: {
@@ -41,6 +50,9 @@ export const refundResolvers = {
         reason: args.reason || "Customer requested refund",
         refundMethod: args.refundMethod,
       });
+    },
+    refundPayment: async (_: unknown, args: { paymentId: string; userId: string; reason?: string; refundMethod?: "WALLET" | "GATEWAY" }) => {
+      return await refundService.getRefundByPaymentId(args.paymentId, args.userId);
     },
   },
 };

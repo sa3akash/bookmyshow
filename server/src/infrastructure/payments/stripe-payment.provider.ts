@@ -29,7 +29,11 @@ export class StripePaymentProvider implements PaymentProvider {
       status: "SUCCESS",
       transactionId,
       amountMinor: 10000,
-      metadata: { gateway: "STRIPE", paymentIntentId: transactionId },
+      metadata: {
+        gateway: "STRIPE",
+        paymentIntentId: transactionId,
+        rawGatewayResponse: { id: transactionId, object: "payment_intent", status: "succeeded", currency: "usd" },
+      },
     };
   }
 

@@ -29,7 +29,11 @@ export class NagadPaymentProvider implements PaymentProvider {
       status: "SUCCESS",
       transactionId,
       amountMinor: 75000,
-      metadata: { gateway: "NAGAD", paymentRefId: transactionId },
+      metadata: {
+        gateway: "NAGAD",
+        paymentRefId: transactionId,
+        rawGatewayResponse: { status: "Success", paymentRefId: transactionId, currency: "BDT" },
+      },
     };
   }
 

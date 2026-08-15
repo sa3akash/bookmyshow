@@ -173,12 +173,26 @@ export class BkashPaymentProvider implements PaymentProvider {
           };
         }
 
+        const rawRes = queryData.statusCode ? queryData : execData;
+        const failureReason = rawRes.statusMessage && rawRes.statusCode !== "0000"
+          ? rawRes.statusMessage
+          : rawRes.transactionStatus
+          ? `Payment ${rawRes.transactionStatus.toLowerCase()} (verificationStatus: ${rawRes.verificationStatus || "Incomplete"})`
+          : "Payment incomplete or cancelled by user";
+
         return {
           verified: false,
           status: "FAILED",
           transactionId,
           amountMinor: 0,
-          metadata: { gateway: "BKASH", rawGatewayResponse: queryData.statusCode ? queryData : execData },
+          metadata: {
+            gateway: "BKASH",
+            status: "FAILED",
+            reason: failureReason,
+            statusCode: rawRes.statusCode || "UNKNOWN",
+            statusMessage: rawRes.statusMessage || failureReason,
+            rawGatewayResponse: rawRes,
+          },
         };
       } catch (err) {
         logger.error({ err }, "bKash Execute/Query Payment Error");

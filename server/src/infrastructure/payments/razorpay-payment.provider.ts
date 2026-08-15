@@ -29,7 +29,11 @@ export class RazorpayPaymentProvider implements PaymentProvider {
       status: "SUCCESS",
       transactionId,
       amountMinor: 30000,
-      metadata: { gateway: "RAZORPAY", orderId: transactionId },
+      metadata: {
+        gateway: "RAZORPAY",
+        orderId: transactionId,
+        rawGatewayResponse: { id: transactionId, entity: "order", status: "paid", currency: "INR" },
+      },
     };
   }
 

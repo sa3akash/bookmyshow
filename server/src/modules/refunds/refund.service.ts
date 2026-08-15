@@ -156,6 +156,29 @@ export class RefundService {
 
     return refund;
   }
+
+  async getRefundByPaymentId(paymentId: string, userId: string) {
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(paymentId);
+    const paymentRecord = await db.query.payments.findFirst({
+      where: isUuid ? eq(payments.id, paymentId) : eq(payments.transactionId, paymentId),
+    });
+
+    const targetPaymentId = paymentRecord ? paymentRecord.id : paymentId;
+
+    const refund = await db.query.refunds.findFirst({
+      where: eq(refunds.paymentId, targetPaymentId),
+    });
+
+    if (!refund) {
+      throw new NotFoundError(`No refund record found for payment: ${paymentId}`);
+    }
+
+    if (refund.userId !== userId) {
+      throw new AuthorizationError("Unauthorized to view this refund");
+    }
+
+    return refund;
+  }
 }
 
 export const refundService = new RefundService();
