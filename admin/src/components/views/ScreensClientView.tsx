@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Layers, Plus, Sliders, Edit, CheckCircle2, RefreshCw, X, Building2, Tv, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -102,11 +103,11 @@ export function ScreensClientView() {
       id: "actions",
       header: "Seat Layout",
       cell: () => (
-        <a href="/seats">
+        <Link href="/seats">
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1 font-bold">
             <Sliders className="h-3 w-3 text-primary" /> Edit Layout
           </Button>
-        </a>
+        </Link>
       ),
     },
   ];

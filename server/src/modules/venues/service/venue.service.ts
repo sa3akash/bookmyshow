@@ -1,6 +1,7 @@
 import { db } from "@/infrastructure/database/client";
 import { cities, venues, venueScreens, seats } from "@/infrastructure/database/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { NotFoundError } from "@/core/errors/app-error";
 
 export interface CreateCityDTO {
   name: string;
@@ -20,6 +21,7 @@ export interface CreateVenueDTO {
 }
 
 export interface CreateScreenLayoutDTO {
+  screenId?: string;
   venueId: string;
   name: string;
   supportedFormats?: string[];
@@ -62,25 +64,87 @@ export class VenueService {
     return inserted;
   }
 
+  async getScreenLayout(screenId: string) {
+    const screen = await db.query.venueScreens.findFirst({
+      where: eq(venueScreens.id, screenId),
+    });
+
+    if (!screen) {
+      throw new NotFoundError("Screen not found");
+    }
+
+    const seatsList = await db.query.seats.findMany({
+      where: and(eq(seats.screenId, screenId), eq(seats.isActive, true)),
+    });
+
+    return {
+      screen,
+      seats: seatsList,
+    };
+  }
+
   async createScreenWithLayout(dto: CreateScreenLayoutDTO) {
+    let targetVenueId = dto.venueId;
+
+    const existingVenue = await db.query.venues.findFirst({
+      where: eq(venues.id, targetVenueId),
+    });
+
+    if (!existingVenue) {
+      const firstVenue = await db.query.venues.findFirst({
+        where: eq(venues.isActive, true),
+      });
+      if (firstVenue) {
+        targetVenueId = firstVenue.id;
+      }
+    }
+
     let totalSeats = 0;
     for (const r of dto.rows) {
       totalSeats += r.seatsCount;
     }
 
     return await db.transaction(async (tx) => {
-      const [screen] = await tx
-        .insert(venueScreens)
-        .values({
-          venueId: dto.venueId,
-          name: dto.name,
-          supportedFormats: dto.supportedFormats || ["2D", "3D", "IMAX", "4DX", "DOLBY", "VIP", "PREMIUM"],
-          totalSeats,
-        })
-        .returning();
+      let screen: typeof venueScreens.$inferSelect | undefined;
+
+      if (dto.screenId) {
+        screen = await tx.query.venueScreens.findFirst({
+          where: eq(venueScreens.id, dto.screenId),
+        });
+      }
 
       if (!screen) {
-        throw new Error("Failed to create venue screen");
+        screen = await tx.query.venueScreens.findFirst({
+          where: and(eq(venueScreens.venueId, targetVenueId), eq(venueScreens.name, dto.name)),
+        });
+      }
+
+      if (screen) {
+        const [updatedScreen] = await tx
+          .update(venueScreens)
+          .set({
+            name: dto.name,
+            totalSeats,
+            supportedFormats: dto.supportedFormats || screen.supportedFormats,
+          })
+          .where(eq(venueScreens.id, screen.id))
+          .returning();
+        screen = updatedScreen!;
+      } else {
+        const [insertedScreen] = await tx
+          .insert(venueScreens)
+          .values({
+            venueId: targetVenueId,
+            name: dto.name,
+            supportedFormats: dto.supportedFormats || ["2D", "3D", "IMAX", "4DX", "DOLBY", "VIP", "PREMIUM"],
+            totalSeats,
+          })
+          .returning();
+        screen = insertedScreen!;
+      }
+
+      if (!screen) {
+        throw new Error("Failed to create or update venue screen");
       }
 
       const seatsToInsert: Array<{
@@ -121,13 +185,76 @@ export class VenueService {
         }
       }
 
-      await tx.insert(seats).values(seatsToInsert);
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < seatsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = seatsToInsert.slice(i, i + CHUNK_SIZE);
+        await tx
+          .insert(seats)
+          .values(chunk)
+          .onConflictDoUpdate({
+            target: [seats.screenId, seats.seatNumber],
+            set: {
+              rowLabel: sql`excluded.row_label`,
+              columnNumber: sql`excluded.column_number`,
+              type: sql`excluded.type`,
+              category: sql`excluded.category`,
+              priceMultiplier: sql`excluded.price_multiplier`,
+              x: sql`excluded.x`,
+              y: sql`excluded.y`,
+              width: sql`excluded.width`,
+              height: sql`excluded.height`,
+              rotation: sql`excluded.rotation`,
+              isActive: true,
+              metadata: sql`excluded.metadata`,
+            },
+          });
+      }
 
       return {
         screen,
         totalSeatsCreated: seatsToInsert.length,
       };
     });
+  }
+
+  async updateVenue(id: string, dto: Partial<CreateVenueDTO> & { isActive?: boolean }) {
+    const [updated] = await db
+      .update(venues)
+      .set(dto)
+      .where(eq(venues.id, id))
+      .returning();
+    if (!updated) throw new NotFoundError("Venue not found");
+    return updated;
+  }
+
+  async deleteVenue(id: string) {
+    const [deleted] = await db
+      .update(venues)
+      .set({ isActive: false })
+      .where(eq(venues.id, id))
+      .returning();
+    if (!deleted) throw new NotFoundError("Venue not found");
+    return { success: true, id };
+  }
+
+  async updateScreen(id: string, dto: { name?: string; supportedFormats?: string[]; totalSeats?: number; isActive?: boolean }) {
+    const [updated] = await db
+      .update(venueScreens)
+      .set(dto)
+      .where(eq(venueScreens.id, id))
+      .returning();
+    if (!updated) throw new NotFoundError("Screen not found");
+    return updated;
+  }
+
+  async deleteScreen(id: string) {
+    const [deleted] = await db
+      .update(venueScreens)
+      .set({ isActive: false })
+      .where(eq(venueScreens.id, id))
+      .returning();
+    if (!deleted) throw new NotFoundError("Screen not found");
+    return { success: true, id };
   }
 }
 
