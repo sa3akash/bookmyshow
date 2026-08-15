@@ -38,9 +38,9 @@ export const app = new Elysia()
             }
           }
         },
-        security: [
-          { bearerAuth: [] }
-        ],
+        // security: [
+        //   { bearerAuth: [] }
+        // ],
         tags: [
           { name: "Auth", description: "Authentication, Registration & JWT Session Management" },
           { name: "Movies", description: "Movies Catalog, Cast, Crew & Trailer Media Gallery" },
