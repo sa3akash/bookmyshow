@@ -83,16 +83,18 @@ export default function DashboardOverviewPage() {
       {/* Top 8 KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1 */}
-        <Card className="hover:border-primary/50 transition-colors">
+        <Card className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Total Revenue
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+            <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <DollarSign className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-foreground">{formatCurrency(12450000)}</div>
-            <div className="flex items-center text-xs text-emerald-500 font-semibold mt-1">
+            <div className="text-2xl font-black tracking-tight text-foreground">{formatCurrency(12450000)}</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
               <TrendingUp className="h-3.5 w-3.5 mr-1" />
               <span>+14.8%</span>
               <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs previous period</span>
@@ -101,16 +103,18 @@ export default function DashboardOverviewPage() {
         </Card>
 
         {/* KPI 2 */}
-        <Card className="hover:border-primary/50 transition-colors">
+        <Card className="hover:border-emerald-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Today's Revenue
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-500" />
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <DollarSign className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-foreground">{formatCurrency(485000)}</div>
-            <div className="flex items-center text-xs text-emerald-500 font-semibold mt-1">
+            <div className="text-2xl font-black tracking-tight text-foreground">{formatCurrency(485000)}</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
               <TrendingUp className="h-3.5 w-3.5 mr-1" />
               <span>+8.2%</span>
               <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs yesterday</span>
@@ -119,16 +123,18 @@ export default function DashboardOverviewPage() {
         </Card>
 
         {/* KPI 3 */}
-        <Card className="hover:border-primary/50 transition-colors">
+        <Card className="hover:border-sky-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-sky-500/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Bookings Count
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Bookings
             </CardTitle>
-            <Ticket className="h-4 w-4 text-sky-500" />
+            <div className="h-8 w-8 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center">
+              <Ticket className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-foreground">{formatNumber(8520)}</div>
-            <div className="flex items-center text-xs text-emerald-500 font-semibold mt-1">
+            <div className="text-2xl font-black tracking-tight text-foreground">{formatNumber(8520)}</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
               <TrendingUp className="h-3.5 w-3.5 mr-1" />
               <span>+12.1%</span>
               <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs last week</span>
@@ -137,20 +143,101 @@ export default function DashboardOverviewPage() {
         </Card>
 
         {/* KPI 4 */}
-        <Card className="hover:border-primary/50 transition-colors">
+        <Card className="hover:border-purple-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Occupancy Rate
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Tickets Sold
             </CardTitle>
-
-            <Activity className="h-4 w-4 text-amber-500" />
+            <div className="h-8 w-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+              <Ticket className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-foreground">78.4%</div>
-            <div className="flex items-center text-xs text-emerald-500 font-semibold mt-1">
+            <div className="text-2xl font-black tracking-tight text-foreground">{formatNumber(18420)}</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
+              <TrendingUp className="h-3.5 w-3.5 mr-1" />
+              <span>+15.4%</span>
+              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs last week</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 5 */}
+        <Card className="hover:border-indigo-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Active Users
+            </CardTitle>
+            <div className="h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+              <Users className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black tracking-tight text-foreground">{formatNumber(12450)}</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
+              <TrendingUp className="h-3.5 w-3.5 mr-1" />
+              <span>+22.1%</span>
+              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">DAU active</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 6 */}
+        <Card className="hover:border-amber-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Occupancy Rate
+            </CardTitle>
+            <div className="h-8 w-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <Activity className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black tracking-tight text-foreground">78.4%</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
               <TrendingUp className="h-3.5 w-3.5 mr-1" />
               <span>+4.5%</span>
               <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">vs avg capacity</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 7 */}
+        <Card className="hover:border-teal-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-teal-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Payment Success Rate
+            </CardTitle>
+            <div className="h-8 w-8 rounded-lg bg-teal-500/10 text-teal-400 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black tracking-tight text-foreground">98.4%</div>
+            <div className="flex items-center text-xs text-emerald-400 font-semibold mt-1">
+              <TrendingUp className="h-3.5 w-3.5 mr-1" />
+              <span>+0.5%</span>
+              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">bKash / Nagad</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 8 */}
+        <Card className="hover:border-rose-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-rose-500/5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Refund Amount
+            </CardTitle>
+            <div className="h-8 w-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
+              <DollarSign className="h-4 w-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black tracking-tight text-foreground">{formatCurrency(125000)}</div>
+            <div className="flex items-center text-xs text-rose-400 font-semibold mt-1">
+              <TrendingDown className="h-3.5 w-3.5 mr-1" />
+              <span>-0.1%</span>
+              <span className="text-muted-foreground font-normal ml-1.5 text-[11px]">0.85% refund rate</span>
             </div>
           </CardContent>
         </Card>
