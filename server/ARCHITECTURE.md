@@ -67,6 +67,7 @@ graph TD
         REST & GQL --> SearchModule[src/modules/search/]
         REST & GQL --> ReviewsModule[src/modules/reviews/]
         REST & GQL --> StatsModule[src/modules/stats/]
+        REST & GQL --> AnalyticsModule[src/modules/analytics/]
     end
 
     subgraph Infrastructure Layer

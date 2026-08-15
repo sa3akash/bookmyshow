@@ -13,7 +13,7 @@ export const statsController = new Elysia({ prefix: "/api/v1/stats" })
     {
       detail: {
         tags: ["System"],
-        summary: "Get comprehensive server monitoring, system runtime, infrastructure & business stats",
+        summary: "Get comprehensive server monitoring, system runtime, infrastructure, business, box office & income stats",
       },
     }
   )
@@ -56,6 +56,34 @@ export const statsController = new Elysia({ prefix: "/api/v1/stats" })
       detail: {
         tags: ["System"],
         summary: "Get real-time business counters (bookings, movies, active shows, seat holds)",
+      },
+    }
+  )
+  .get(
+    "/boxoffice",
+    async ({ request }) => {
+      const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+      const stats = await statsService.getBoxOfficeStats();
+      return successResponse(stats, undefined, requestId);
+    },
+    {
+      detail: {
+        tags: ["System"],
+        summary: "Get Box Office collection statistics and top-grossing movie breakdown",
+      },
+    }
+  )
+  .get(
+    "/income",
+    async ({ request }) => {
+      const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+      const stats = await statsService.getIncomeStats();
+      return successResponse(stats, undefined, requestId);
+    },
+    {
+      detail: {
+        tags: ["System"],
+        summary: "Get platform financial income breakdown (Commission, Tax, Payouts, Refunds, Net Income)",
       },
     }
   );

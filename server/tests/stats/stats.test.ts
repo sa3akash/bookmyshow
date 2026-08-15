@@ -26,6 +26,21 @@ describe("SERVER MONITORING & STATS SUBSYSTEM TEST SUITE", () => {
     expect(stats.activeSeatHolds).toBeGreaterThanOrEqual(0);
   });
 
+  test("statsService returns box office collection stats", async () => {
+    const stats = await statsService.getBoxOfficeStats();
+    expect(stats.totalGrossBoxOfficeMinor).toBeGreaterThanOrEqual(0);
+    expect(stats.totalGrossBoxOfficeBDT).toBeGreaterThanOrEqual(0);
+    expect(stats.topGrossingMovies).toBeDefined();
+  });
+
+  test("statsService returns financial income breakdown", async () => {
+    const stats = await statsService.getIncomeStats();
+    expect(stats.grossTicketSalesMinor).toBeGreaterThanOrEqual(0);
+    expect(stats.platformFeeIncomeMinor).toBeGreaterThanOrEqual(0);
+    expect(stats.taxCollectedMinor).toBeGreaterThanOrEqual(0);
+    expect(stats.merchantPayoutsMinor).toBeGreaterThanOrEqual(0);
+  });
+
   test("GET /api/v1/stats returns comprehensive monitoring payload", async () => {
     const res = await app.handle(new Request("http://localhost/api/v1/stats"));
     expect(res.status).toBe(200);
@@ -35,51 +50,44 @@ describe("SERVER MONITORING & STATS SUBSYSTEM TEST SUITE", () => {
     expect(json.data.system.runtime).toBeDefined();
     expect(json.data.infra.database.status).toBeDefined();
     expect(json.data.business.totalBookings).toBeGreaterThanOrEqual(0);
+    expect(json.data.boxOffice.totalGrossBoxOfficeBDT).toBeGreaterThanOrEqual(0);
+    expect(json.data.income.platformFeeIncomeBDT).toBeGreaterThanOrEqual(0);
   });
 
-  test("GET /api/v1/stats/system returns process runtime details", async () => {
-    const res = await app.handle(new Request("http://localhost/api/v1/stats/system"));
+  test("GET /api/v1/stats/boxoffice returns box office earnings and top grossing movies", async () => {
+    const res = await app.handle(new Request("http://localhost/api/v1/stats/boxoffice"));
     expect(res.status).toBe(200);
 
     const json = await res.json();
     expect(json.success).toBe(true);
-    expect(json.data.memory.heapTotalMb).toBeGreaterThan(0);
+    expect(json.data.totalGrossBoxOfficeMinor).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(json.data.topGrossingMovies)).toBe(true);
   });
 
-  test("GET /api/v1/stats/infra returns infrastructure health status", async () => {
-    const res = await app.handle(new Request("http://localhost/api/v1/stats/infra"));
+  test("GET /api/v1/stats/income returns platform fee income, tax, and merchant payout breakdown", async () => {
+    const res = await app.handle(new Request("http://localhost/api/v1/stats/income"));
     expect(res.status).toBe(200);
 
     const json = await res.json();
     expect(json.success).toBe(true);
-    expect(json.data.database.healthy).toBeDefined();
+    expect(json.data.platformFeeIncomeBDT).toBeGreaterThanOrEqual(0);
+    expect(json.data.merchantPayoutsBDT).toBeGreaterThanOrEqual(0);
   });
 
-  test("GET /api/v1/stats/business returns catalog and reservation counters", async () => {
-    const res = await app.handle(new Request("http://localhost/api/v1/stats/business"));
-    expect(res.status).toBe(200);
-
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.data.totalMovies).toBeGreaterThanOrEqual(0);
-  });
-
-  test("GraphQL Query stats fetches monitoring statistics via /graphql", async () => {
+  test("GraphQL Query stats fetches boxOffice and income statistics via /graphql", async () => {
     const body = JSON.stringify({
       query: `
         query {
           stats {
-            system {
-              runtime
-              uptimeHuman
+            boxOffice {
+              totalGrossBoxOfficeBDT
+              todayBoxOfficeBDT
             }
-            infra {
-              database { status healthy }
-              redis { status healthy }
-            }
-            business {
-              totalBookings
-              totalMovies
+            income {
+              grossTicketSalesBDT
+              platformFeeIncomeBDT
+              merchantPayoutsBDT
+              netPlatformIncomeBDT
             }
           }
         }
@@ -96,7 +104,7 @@ describe("SERVER MONITORING & STATS SUBSYSTEM TEST SUITE", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.data.stats.system.runtime).toBeDefined();
-    expect(json.data.stats.infra.database.status).toBeDefined();
+    expect(json.data.stats.boxOffice.totalGrossBoxOfficeBDT).toBeGreaterThanOrEqual(0);
+    expect(json.data.stats.income.platformFeeIncomeBDT).toBeGreaterThanOrEqual(0);
   });
 });

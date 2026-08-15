@@ -11,4 +11,5 @@ export * from "./events.table";
 export * from "./infra.table";
 export * from "./mfa.table";
 export * from "./passkeys.table";
+export * from "./analytics.table";
 export * from "./relations";

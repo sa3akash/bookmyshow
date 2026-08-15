@@ -135,4 +135,30 @@ export const realtimeWsController = new Elysia({ prefix: "/ws" })
         logger.info({ wsId: ws.id }, "WebSocket admin channel connection closed");
       }
     },
+  })
+
+  // 5. Real-Time Analytics Dashboard Channel (/ws/analytics) - Redis Pub/Sub Channel for Live Metrics
+  .ws("/analytics", {
+    open(ws) {
+      const channel = "analytics:realtime";
+      logger.info({ wsId: ws.id }, "WebSocket client connected to real-time analytics dashboard channel");
+
+      const subClient = createRedisSubscriber(channel, (message) => {
+        try {
+          ws.send(JSON.parse(message));
+        } catch {
+          ws.send(message);
+        }
+      });
+
+      wsClientsMap.set(ws.id, { subClient });
+    },
+    close(ws) {
+      const meta = wsClientsMap.get(ws.id);
+      if (meta) {
+        meta.subClient.quit();
+        wsClientsMap.delete(ws.id);
+        logger.info({ wsId: ws.id }, "WebSocket analytics dashboard channel connection closed");
+      }
+    },
   });

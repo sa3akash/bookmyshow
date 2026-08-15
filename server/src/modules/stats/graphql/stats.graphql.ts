@@ -46,10 +46,44 @@ export const statsTypeDefs = `
     activeSeatHolds: Int!
   }
 
+  type BoxOfficeMovieItem {
+    movieId: String!
+    title: String!
+    ticketsSold: Int!
+    grossRevenueMinor: Float!
+    grossRevenueBDT: Float!
+  }
+
+  type BoxOfficeStats {
+    totalGrossBoxOfficeMinor: Float!
+    totalGrossBoxOfficeBDT: Float!
+    todayBoxOfficeMinor: Float!
+    todayBoxOfficeBDT: Float!
+    totalTicketsSold: Int!
+    topGrossingMovies: [BoxOfficeMovieItem!]!
+  }
+
+  type FinancialIncomeStats {
+    grossTicketSalesMinor: Float!
+    grossTicketSalesBDT: Float!
+    platformFeeIncomeMinor: Float!
+    platformFeeIncomeBDT: Float!
+    taxCollectedMinor: Float!
+    taxCollectedBDT: Float!
+    merchantPayoutsMinor: Float!
+    merchantPayoutsBDT: Float!
+    totalRefundsProcessedMinor: Float!
+    totalRefundsProcessedBDT: Float!
+    netPlatformIncomeMinor: Float!
+    netPlatformIncomeBDT: Float!
+  }
+
   type ComprehensiveStats {
     system: SystemStats!
     infra: InfraStats!
     business: BusinessStats!
+    boxOffice: BoxOfficeStats!
+    income: FinancialIncomeStats!
   }
 
   extend type Query {
@@ -57,6 +91,8 @@ export const statsTypeDefs = `
     systemStats: SystemStats!
     infraStats: InfraStats!
     businessStats: BusinessStats!
+    boxOfficeStats: BoxOfficeStats!
+    incomeStats: FinancialIncomeStats!
   }
 `;
 
@@ -73,6 +109,12 @@ export const statsResolvers = {
     },
     businessStats: async () => {
       return await statsService.getBusinessStats();
+    },
+    boxOfficeStats: async () => {
+      return await statsService.getBoxOfficeStats();
+    },
+    incomeStats: async () => {
+      return await statsService.getIncomeStats();
     },
   },
 };
