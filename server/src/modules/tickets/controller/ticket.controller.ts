@@ -32,17 +32,55 @@ export const ticketController = new Elysia({ prefix: "/api/v1/tickets" })
     }
   )
   .get(
+    "/pass/:identifier",
+    async ({ params, set }) => {
+      const pdfBytes = await pdfInvoiceService.generateBoardingPassPDF(params.identifier);
+      set.headers["content-type"] = "application/pdf";
+      set.headers["content-disposition"] = `inline; filename="theater-pass-${params.identifier}.pdf"`;
+      return pdfBytes;
+    },
+    {
+      params: t.Object({ identifier: t.String() }),
+      detail: { tags: ["Tickets"], summary: "Download official theater entry boarding pass PDF with QR code" },
+    }
+  )
+  .get(
+    "/receipt/:identifier",
+    async ({ params, set }) => {
+      const pdfBytes = await pdfInvoiceService.generateMoneyReceiptPDF(params.identifier);
+      set.headers["content-type"] = "application/pdf";
+      set.headers["content-disposition"] = `inline; filename="money-receipt-${params.identifier}.pdf"`;
+      return pdfBytes;
+    },
+    {
+      params: t.Object({ identifier: t.String() }),
+      detail: { tags: ["Tickets"], summary: "Download official Tax Invoice & Money Receipt PDF document" },
+    }
+  )
+  .get(
     "/:ticketId/pdf",
     async ({ params, set }) => {
-      const pdfBytes = await pdfInvoiceService.generateTicketPDF(params.ticketId);
-      
+      const pdfBytes = await pdfInvoiceService.generateBoardingPassPDF(params.ticketId);
       set.headers["content-type"] = "application/pdf";
-      set.headers["content-disposition"] = `attachment; filename="ticket-${params.ticketId}.pdf"`;
+      set.headers["content-disposition"] = `attachment; filename="theater-pass-${params.ticketId}.pdf"`;
       return pdfBytes;
     },
     {
       params: t.Object({ ticketId: t.String() }),
-      detail: { tags: ["Tickets"], summary: "Download official e-ticket invoice as PDF document" },
+      detail: { tags: ["Tickets"], summary: "Download official theater entry boarding pass PDF with QR code" },
+    }
+  )
+  .post(
+    "/verify",
+    async ({ body, request }) => {
+      const { requireRole, requestId } = getRequestContext(request);
+      requireRole("VENUE_MANAGER"); // Only gate ticket scanner roles
+      const result = await ticketService.verifyAndClaimTicket(body.ticketCode);
+      return successResponse(result, undefined, requestId);
+    },
+    {
+      body: t.Object({ ticketCode: t.String() }),
+      detail: { tags: ["Tickets"], summary: "Gate ticket scanner QR code verification" },
     }
   )
   .post(
@@ -55,6 +93,6 @@ export const ticketController = new Elysia({ prefix: "/api/v1/tickets" })
     },
     {
       params: t.Object({ ticketCode: t.String() }),
-      detail: { tags: ["Tickets"], summary: "Gate ticket scanner QR code verification" },
+      detail: { tags: ["Tickets"], summary: "Gate ticket scanner QR code verification by path parameter" },
     }
   );

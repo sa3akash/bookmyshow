@@ -101,13 +101,31 @@ export class TicketService {
     return ticket;
   }
 
-  async verifyAndClaimTicket(ticketCode: string) {
-    const ticket = await db.query.tickets.findFirst({
-      where: eq(tickets.ticketCode, ticketCode),
+  async verifyAndClaimTicket(scanPayload: string) {
+    let ticketCode = scanPayload;
+    if (scanPayload.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(scanPayload);
+        ticketCode = parsed.ticketCode || scanPayload;
+      } catch {}
+    }
+
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ticketCode);
+
+    let ticket = await db.query.tickets.findFirst({
+      where: isUuid
+        ? eq(tickets.id, ticketCode)
+        : eq(tickets.ticketCode, ticketCode),
     });
 
+    if (!ticket && isUuid) {
+      ticket = await db.query.tickets.findFirst({
+        where: eq(tickets.bookingId, ticketCode),
+      });
+    }
+
     if (!ticket) {
-      throw new NotFoundError(`Ticket ${ticketCode} not found`);
+      throw new NotFoundError(`Ticket matching scan payload '${scanPayload}' not found`);
     }
 
     if (ticket.status === "USED") {
@@ -125,8 +143,9 @@ export class TicketService {
 
     return {
       status: "VALID",
-      message: "Ticket verified successfully. Access granted.",
+      message: "Ticket verified successfully. Access granted to theater.",
       ticketCode: ticket.ticketCode,
+      bookingId: ticket.bookingId,
       showId: ticket.showId,
       scannedAt: new Date().toISOString(),
     };

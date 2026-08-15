@@ -2,6 +2,9 @@ import { Movie, Venue, Show, SeatItem, Booking, Coupon } from "@/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 
+export const getTicketPassUrl = (identifier: string) => `${API_BASE_URL}/tickets/pass/${identifier}`;
+export const getMoneyReceiptUrl = (identifier: string) => `${API_BASE_URL}/tickets/receipt/${identifier}`;
+
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
   try {

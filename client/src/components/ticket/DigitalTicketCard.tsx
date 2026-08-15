@@ -2,15 +2,19 @@
 
 import React from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Film, MapPin, Calendar, Clock, Tv, Ticket, CheckCircle2 } from "lucide-react";
+import { Film, MapPin, Calendar, Clock, Tv, Ticket, CheckCircle2, Download, FileText } from "lucide-react";
 import { Booking } from "@/types";
 import { formatCurrency, formatDateString } from "@/lib/utils";
+import { getTicketPassUrl, getMoneyReceiptUrl } from "@/lib/api/client";
 
 interface DigitalTicketCardProps {
   booking: Booking;
 }
 
 export function DigitalTicketCard({ booking }: DigitalTicketCardProps) {
+  const ticketPassUrl = getTicketPassUrl(booking.bookingId);
+  const moneyReceiptUrl = getMoneyReceiptUrl(booking.bookingId);
+
   return (
     <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-800 bg-[#090c14] shadow-2xl">
       {/* Top Banner Gradient Header */}
@@ -63,6 +67,29 @@ export function DigitalTicketCard({ booking }: DigitalTicketCardProps) {
           </span>
         </div>
 
+        {/* PDF Ticket & Receipt Downloads */}
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
+          <a
+            href={ticketPassUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 py-2.5 px-3 text-center text-xs font-bold text-rose-400 hover:bg-rose-600 hover:text-white transition-all shadow-md"
+          >
+            <Ticket className="h-4 w-4 shrink-0" />
+            <span>Movie Pass (PDF)</span>
+          </a>
+
+          <a
+            href={moneyReceiptUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2.5 px-3 text-center text-xs font-bold text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all shadow-md"
+          >
+            <FileText className="h-4 w-4 shrink-0" />
+            <span>Tax Invoice (PDF)</span>
+          </a>
+        </div>
+
         {/* Payment Summary */}
         <div className="flex items-center justify-between border-t border-slate-800/80 pt-3 text-xs">
           <span className="text-slate-400">Total Paid</span>
@@ -74,3 +101,4 @@ export function DigitalTicketCard({ booking }: DigitalTicketCardProps) {
     </div>
   );
 }
+

@@ -181,6 +181,33 @@ export function useShowSeatsQuery(screenId: string, showId: string, basePrice = 
   return useQuery<SeatItem[]>({
     queryKey: ["client", "seats", screenId, showId],
     queryFn: async () => {
+      if (showId && showId.trim()) {
+        try {
+          const seatData = await apiClient<any>(`/shows/${showId}/seats`);
+          if (seatData && Array.isArray(seatData.seats) && seatData.seats.length > 0) {
+            return seatData.seats.map((s: any) => ({
+              id: s.id || `seat_${s.rowLabel}_${s.columnNumber}`,
+              rowId: s.rowLabel || s.rowId || "A",
+              rowLabel: s.rowLabel || s.rowId || "A",
+              col: s.columnNumber || s.col || 1,
+              number: s.columnNumber || s.number || 1,
+              label: s.seatNumber || s.label || `${s.rowLabel || "A"}${s.columnNumber || 1}`,
+              x: s.x || (s.columnNumber || 1) * 48,
+              y: s.y || 100,
+              width: s.width || 36,
+              height: s.height || 38,
+              rotation: s.rotation || 0,
+              type: s.type || "REGULAR",
+              category: s.category || "SILVER",
+              price: s.price ? Math.round(s.price) : Math.round(basePrice * (parseFloat(s.priceMultiplier) || 1.0)),
+              status: s.status || (s.isActive === false ? "BLOCKED" : "AVAILABLE"),
+            }));
+          }
+        } catch (err) {
+          console.warn(`[Client Queries] Live seat map endpoint /shows/${showId}/seats fallback active:`, err);
+        }
+      }
+
       try {
         const layout = await apiClient<any>(`/screens/${screenId}/layout`);
         if (layout && Array.isArray(layout.seats) && layout.seats.length > 0) {

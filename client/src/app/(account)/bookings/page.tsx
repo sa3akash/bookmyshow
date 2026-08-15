@@ -2,9 +2,10 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Ticket, RefreshCw } from "lucide-react";
+import { Ticket, RefreshCw, FileText } from "lucide-react";
 import { useCustomerBookingsQuery } from "@/hooks/useClientQueries";
 import { formatCurrency, formatDateString } from "@/lib/utils";
+import { getTicketPassUrl, getMoneyReceiptUrl } from "@/lib/api/client";
 
 export default function BookingsHistoryPage() {
   const [tab, setTab] = useState<"UPCOMING" | "COMPLETED" | "ALL">("UPCOMING");
@@ -91,12 +92,34 @@ export default function BookingsHistoryPage() {
                 <span className="font-mono font-black text-emerald-400 text-base">
                   {formatCurrency(b.totalAmount)}
                 </span>
-                <Link
-                  href={`/booking/${b.showId}/confirmation/${b.bookingId}`}
-                  className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-bold text-rose-400 hover:bg-rose-500 hover:text-white transition-all shadow-md"
-                >
-                  View Digital Ticket
-                </Link>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <a
+                    href={getTicketPassUrl(b.bookingId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-[11px] font-bold text-rose-400 hover:bg-rose-600 hover:text-white transition-all shadow-md flex items-center gap-1"
+                  >
+                    <Ticket className="h-3.5 w-3.5" />
+                    <span>Pass (PDF)</span>
+                  </a>
+
+                  <a
+                    href={getMoneyReceiptUrl(b.bookingId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all shadow-md flex items-center gap-1"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Receipt (PDF)</span>
+                  </a>
+
+                  <Link
+                    href={`/booking/${b.showId}/confirmation/${b.bookingId}`}
+                    className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition-all"
+                  >
+                    View Ticket
+                  </Link>
+                </div>
               </div>
             </div>
           ))}
